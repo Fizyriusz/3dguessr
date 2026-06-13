@@ -34,9 +34,12 @@ type GameState = {
 };
 
 function App() {
+  // Read room from URL query parameters, default to "default-room"
+  const roomId = new URLSearchParams(window.location.search).get("room") || "default-room";
+
   const socket = usePartySocket({
-    host: "localhost:1999",
-    room: "default-room",
+    host: import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999",
+    room: roomId,
   });
 
   const [gameState, setGameState] = useState<GameState>({
@@ -56,10 +59,12 @@ function App() {
   const [nickname, setNickname] = useState(() => {
     return localStorage.getItem("poland_guessr_nickname") || "";
   });
+  const [roomInput, setRoomInput] = useState(roomId);
   const [hasJoined, setHasJoined] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("poland_guessr_theme") as "light" | "dark") || "dark";
   });
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Sync theme class with body element
   useEffect(() => {
@@ -131,9 +136,23 @@ function App() {
     e.preventDefault();
     if (!nickname.trim()) return;
     
+    // Save nickname
+    localStorage.setItem("poland_guessr_nickname", nickname);
+
+    // If the room input in main menu differs from the current active socket room, redirect to it
+    const targetRoom = roomInput.trim() || "default-room";
+    if (targetRoom !== roomId) {
+      window.location.search = `?room=${encodeURIComponent(targetRoom)}`;
+      return;
+    }
+
     socket.send(JSON.stringify({ type: "join", nickname }));
     setHasJoined(true);
-    localStorage.setItem("poland_guessr_nickname", nickname);
+  };
+
+  const handleCreateRandomRoom = () => {
+    const randomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+    window.location.search = `?room=${randomCode}`;
   };
 
   const handleStartGame = () => {
@@ -141,7 +160,7 @@ function App() {
   };
 
   const handleResetGame = () => {
-    if (confirm("Czy na pewno chcesz zresetować rozgrywkę i wrócić do poczekalni? Aktualne punkty zostaną wyzerowane.")) {
+    if (confirm("Czy na pewno chcesz zresetować rozgrywkę i wrócić do poczekalni? Wszystkie punkty zostaną wyzerowane.")) {
       socket.send(JSON.stringify({ type: "reset_game" }));
     }
   };
@@ -154,6 +173,14 @@ function App() {
       firstGuessTimerEnabled: settings.firstGuessTimerEnabled ?? gameState.firstGuessTimerEnabled,
       firstGuessTimerDuration: settings.firstGuessTimerDuration ?? gameState.firstGuessTimerDuration
     }));
+  };
+
+  const handleCopyLink = () => {
+    const shareUrl = window.location.href;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    });
   };
 
   // Handle movements triggered inside StreetView
@@ -212,7 +239,7 @@ function App() {
         {theme === "light" ? "🌙" : "☀️"}
       </button>
 
-      {/* 1. Main Menu / Nickname Select */}
+      {/* 1. Main Menu / Nickname & Room Select */}
       {showMainMenu && (
         <div 
           style={{
@@ -271,10 +298,34 @@ function App() {
                   autoFocus
                 />
               </div>
+
+              <div style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-secondary)" }}>Nazwa/Kod pokoju</label>
+                <input
+                  type="text"
+                  placeholder="default-room"
+                  className="custom-input"
+                  value={roomInput}
+                  onChange={(e) => setRoomInput(e.target.value.trim().substring(0, 20))}
+                  maxLength={20}
+                  required
+                />
+              </div>
               
-              <button type="submit" className="btn-primary" style={{ padding: "14px 28px", fontSize: "16px", marginTop: "8px" }}>
-                Wejdź do poczekalni
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
+                <button type="submit" className="btn-primary" style={{ padding: "12px 24px", fontSize: "15px" }}>
+                  Wejdź do pokoju
+                </button>
+                
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  style={{ padding: "10px 20px", fontSize: "13px" }}
+                  onClick={handleCreateRandomRoom}
+                >
+                  🎲 Stwórz losowy pokój
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -349,17 +400,31 @@ function App() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "var(--text-color)" }}>Lista Graczy</h3>
-            {isHost && gameState.status === "ROUND_ACTIVE" && (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "var(--text-color)" }}>Lista Graczy</h3>
+              <span style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                Pokój: <b style={{ color: "#6366f1" }}>{roomId}</b>
+              </span>
+            </div>
+            {isHost && gameState.status !== "LOBBY" && (
               <button 
                 onClick={handleResetGame} 
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", padding: 0 }}
-                title="Resetuj rozgrywkę"
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: "16px", padding: 0 }}
+                title="Zresetuj i wróć do lobby"
               >
                 🔄
               </button>
             )}
           </div>
+
+          {/* Copy Room Link Button */}
+          <button 
+            className="btn-secondary" 
+            style={{ padding: "6px 12px", fontSize: "12px", width: "100%", fontWeight: 700 }}
+            onClick={handleCopyLink}
+          >
+            {copyFeedback ? "✓ Skopiowano!" : "🔗 Kopiuj link zaproszenia"}
+          </button>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {sortedPlayers.map((player) => (
@@ -609,7 +674,7 @@ function App() {
                   {gameState.currentRound >= gameState.totalRounds ? "Podsumowanie gry" : "Następna runda"}
                 </button>
                 <button className="btn-secondary" style={{ width: "100%" }} onClick={handleResetGame}>
-                  Powrót do lobby
+                  Powrót do lobby (Reset)
                 </button>
               </>
             ) : (
@@ -697,7 +762,7 @@ function App() {
                     Zagraj ponownie
                   </button>
                   <button className="btn-secondary" style={{ width: "100%" }} onClick={handleResetGame}>
-                    Powrót do lobby
+                    Powrót do lobby (Reset)
                   </button>
                 </>
               ) : (
