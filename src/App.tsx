@@ -86,11 +86,6 @@ function App() {
         const data = JSON.parse(e.data);
         if (data.type === "sync") {
           setGameState(data);
-          
-          const inList = data.players.some((p: Player) => p.id === socket.id);
-          if (inList && !hasJoined) {
-            setHasJoined(true);
-          }
         }
       } catch (err) {
         console.error("Error reading socket message:", err);
@@ -99,7 +94,7 @@ function App() {
 
     socket.addEventListener("message", handleMessage);
     return () => socket.removeEventListener("message", handleMessage);
-  }, [socket, hasJoined]);
+  }, [socket]);
 
   // Handle lobby Keyboard movement (W/S/A/D) directly on the Leaflet grid map
   useEffect(() => {
@@ -163,6 +158,14 @@ function App() {
     if (confirm("Czy na pewno chcesz zresetować rozgrywkę i wrócić do poczekalni? Wszystkie punkty zostaną wyzerowane.")) {
       socket.send(JSON.stringify({ type: "reset_game" }));
     }
+  };
+
+  const handleLeave = () => {
+    if (gameState.status !== "LOBBY" && !confirm("Czy na pewno chcesz opuścić aktywną grę i wrócić do menu?")) {
+      return;
+    }
+    socket.send(JSON.stringify({ type: "leave" }));
+    setHasJoined(false);
   };
 
   const handleConfigChange = (settings: Partial<GameState>) => {
@@ -417,14 +420,26 @@ function App() {
             )}
           </div>
 
-          {/* Copy Room Link Button */}
-          <button 
-            className="btn-secondary" 
-            style={{ padding: "6px 12px", fontSize: "12px", width: "100%", fontWeight: 700 }}
-            onClick={handleCopyLink}
-          >
-            {copyFeedback ? "✓ Skopiowano!" : "🔗 Kopiuj link zaproszenia"}
-          </button>
+          {/* Copy Room Link & Leave Buttons */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <button 
+              className="btn-secondary" 
+              style={{ padding: "6px 12px", fontSize: "12px", width: "100%", fontWeight: 700 }}
+              onClick={handleCopyLink}
+            >
+              {copyFeedback ? "✓ Skopiowano!" : "🔗 Kopiuj link zaproszenia"}
+            </button>
+            
+            {gameState.status === "LOBBY" && (
+              <button 
+                className="btn-secondary" 
+                style={{ padding: "6px 12px", fontSize: "12px", width: "100%", fontWeight: 700, borderColor: "rgba(239, 68, 68, 0.4)", color: "#ef4444" }}
+                onClick={handleLeave}
+              >
+                🚪 Opuść pokój
+              </button>
+            )}
+          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {sortedPlayers.map((player) => (
@@ -536,6 +551,17 @@ function App() {
                 </>
               )}
             </div>
+          )}
+
+          {/* Leave Button during active games at the bottom of the sidebar */}
+          {gameState.status !== "LOBBY" && (
+            <button 
+              className="btn-secondary" 
+              style={{ padding: "8px 12px", fontSize: "12px", width: "100%", fontWeight: 700, borderColor: "rgba(239, 68, 68, 0.4)", color: "#ef4444", marginTop: "auto" }}
+              onClick={handleLeave}
+            >
+              🚪 Opuść grę (Menu)
+            </button>
           )}
         </div>
       )}
@@ -682,6 +708,9 @@ function App() {
                 Oczekiwanie na decyzję hosta...
               </div>
             )}
+            <button className="btn-secondary" style={{ width: "100%", borderColor: "rgba(239, 68, 68, 0.4)", color: "#ef4444" }} onClick={handleLeave}>
+              🚪 Wyjdź do menu
+            </button>
           </div>
         </div>
       )}
@@ -770,6 +799,9 @@ function App() {
                   Oczekiwanie na decyzję hosta o restarcie...
                 </div>
               )}
+              <button className="btn-secondary" style={{ width: "100%", borderColor: "rgba(239, 68, 68, 0.4)", color: "#ef4444" }} onClick={handleLeave}>
+                🚪 Wyjdź do menu
+              </button>
             </div>
           </div>
         </div>

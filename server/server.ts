@@ -77,38 +77,46 @@ export default class GameServer implements Party.Server {
   }
 
   onConnect(conn: Party.Connection) {
-    console.log("Player joined:", conn.id);
-    const isHost = this.players.size === 0;
-
-    this.players.set(conn.id, {
-      id: conn.id,
-      nickname: "Player " + Math.floor(Math.random() * 1000),
-      score: 0,
-      hasGuessed: false,
-      guess: null,
-      roundPoints: 0,
-      distance: null,
-      isHost: isHost,
-      
-      // Default geographical coords (Warszawa PKiN)
-      lat: 52.2304,
-      lng: 21.0044
-    });
-    
+    console.log("Connection established:", conn.id);
+    // Don't auto-add to players map. They must send a "join" message first.
     this.broadcastState();
   }
 
   onMessage(message: string, sender: Party.Connection) {
     try {
       const data = JSON.parse(message);
+      
+      // If it's a join message, register the player profile
+      if (data.type === "join") {
+        if (!this.players.has(sender.id)) {
+          const isHost = this.players.size === 0;
+          this.players.set(sender.id, {
+            id: sender.id,
+            nickname: (data.nickname || "Player").trim().substring(0, 16),
+            score: 0,
+            hasGuessed: false,
+            guess: null,
+            roundPoints: 0,
+            distance: null,
+            isHost: isHost,
+            lat: 52.2304,
+            lng: 21.0044
+          });
+        } else {
+          const p = this.players.get(sender.id)!;
+          p.nickname = (data.nickname || "Player").trim().substring(0, 16);
+        }
+        this.broadcastState();
+        return;
+      }
+
       const player = this.players.get(sender.id);
       if (!player) return;
 
       switch (data.type) {
-        case "join":
-          if (data.nickname) {
-            player.nickname = data.nickname.trim().substring(0, 16);
-          }
+        case "leave":
+          this.removePlayer(sender.id);
+          this.broadcastState();
           break;
 
         case "update":
@@ -193,10 +201,16 @@ export default class GameServer implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
-    console.log("Player left:", conn.id);
-    const wasHost = this.players.get(conn.id)?.isHost;
-    this.players.delete(conn.id);
+    console.log("Player disconnected:", conn.id);
+    this.removePlayer(conn.id);
+    this.broadcastState();
+  }
 
+  removePlayer(id: string) {
+    const wasHost = this.players.get(id)?.isHost;
+    this.players.delete(id);
+
+    // Reassign host if needed
     if (wasHost && this.players.size > 0) {
       const firstPlayerId = Array.from(this.players.keys())[0];
       const newHost = this.players.get(firstPlayerId);
