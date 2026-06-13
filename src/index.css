@@ -1,0 +1,363 @@
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  /* Theme variables - Default Dark Mode */
+  --bg-color: #0d0c1d;
+  --text-color: #f4f4f9;
+  --text-secondary: #94a3b8;
+  --glass-bg: rgba(13, 12, 29, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.15);
+  --glass-shadow: rgba(0, 0, 0, 0.37);
+  --glass-shadow-hover: rgba(0, 0, 0, 0.5);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255, 255, 255, 0.12);
+  --sidebar-bg: #0d0c1d;
+  --item-bg: rgba(255, 255, 255, 0.03);
+}
+
+.theme-light {
+  --bg-color: #f1f5f9; /* Slate-100 */
+  --text-color: #0f172a; /* Slate-900 */
+  --text-secondary: #475569; /* Slate-600 */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-border-hover: rgba(15, 23, 42, 0.15);
+  --glass-shadow: rgba(15, 23, 42, 0.06);
+  --glass-shadow-hover: rgba(15, 23, 42, 0.12);
+  --input-bg: rgba(15, 23, 42, 0.04);
+  --input-border: rgba(15, 23, 42, 0.12);
+  --sidebar-bg: #ffffff;
+  --item-bg: rgba(15, 23, 42, 0.04);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden;
+  user-select: none;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Glassmorphism Panel styles */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.glass-panel:hover {
+  border-color: var(--glass-border-hover);
+  box-shadow: 0 12px 40px 0 var(--glass-shadow-hover);
+}
+
+/* Custom Leaflet Map styling */
+.leaflet-container {
+  background: var(--bg-color) !important;
+}
+
+/* Split screen layout */
+.split-screen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background-color: var(--bg-color);
+}
+
+/* 2D Player Bean Marker Styles */
+.player-bean-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 60px;
+  height: 60px;
+  margin-top: -30px;
+  margin-left: -30px;
+}
+
+.player-bean {
+  width: 14px;
+  height: 24px;
+  background-color: #6366f1;
+  border: 2px solid white;
+  border-radius: 8px; /* Capsule shape (like a bean) */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.5), 0 0 8px rgba(255, 255, 255, 0.2);
+  animation: bean-bob 1s ease-in-out infinite alternate;
+  position: relative;
+  z-index: 5;
+}
+
+/* Tiny eyes on the bean */
+.player-bean::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 2px;
+  width: 3px;
+  height: 3px;
+  background: black;
+  border-radius: 50%;
+  box-shadow: 4px 0 0 black; /* Second eye */
+}
+
+.player-bean-label {
+  background: rgba(13, 12, 29, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  position: absolute;
+  top: -18px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  z-index: 6;
+}
+
+/* Custom Marker Pulsing Effect */
+.leaflet-div-icon {
+  background: none !important;
+  border: none !important;
+}
+
+.custom-pulse-marker {
+  width: 16px;
+  height: 16px;
+  background: #10b981; /* Emerald-500 */
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+  position: relative;
+}
+
+.custom-pulse-marker::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  border: 2px solid #10b981;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+  opacity: 0;
+}
+
+.target-marker {
+  width: 20px;
+  height: 20px;
+  background: #ef4444; /* Red-500 */
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+  position: relative;
+}
+
+.target-marker::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  border: 2px solid #ef4444;
+  border-radius: 50%;
+  animation: pulse 1.2s infinite;
+  opacity: 0;
+}
+
+@keyframes bean-bob {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-4px); }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Elegant Buttons */
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.6);
+  filter: brightness(1.1);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-color);
+  border: 1px solid var(--glass-border);
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Inputs */
+.custom-input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text-color);
+  padding: 12px 16px;
+  font-size: 16px;
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.custom-input:focus {
+  border-color: #6366f1;
+  background: var(--input-bg);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-zoom-in {
+  animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Google Maps Street View Marker Label Styling */
+.google-marker-label {
+  background: rgba(13, 12, 29, 0.85) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+  font-family: 'Outfit', 'Inter', sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  white-space: nowrap !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4) !important;
+  margin-top: -65px !important; /* Float above the bean icon */
+}
+
+/* Custom Settings Controls */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.settings-select {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text-color);
+  padding: 8px 12px;
+  border-radius: 8px;
+  outline: none;
+  font-size: 14px;
+}
+
+.settings-checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}

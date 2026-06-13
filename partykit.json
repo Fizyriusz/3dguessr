@@ -1,0 +1,4 @@
+{
+  "name": "3dguessr-party",
+  "main": "server/server.ts"
+}
