@@ -54,52 +54,95 @@ export function GoogleMap3D({
   const headingRef = useRef<number>(0); // 0 = North, 90 = East, 180 = South, 270 = West
 
   // Keyboard controls state
-  const keys = useRef({ w: false, s: false, a: false, d: false });
+  const keys = useRef({ w: false, s: false, a: false, d: false, q: false, e: false });
 
-  // Initialize Maps3D library and wait for custom elements registration
+  // Wait for maps3d custom elements to be registered by the script in index.html
+  // Do NOT call importLibrary() here – the script tag already loaded maps3d,
+  // calling it again causes 'Element already defined' double-registration errors.
   useEffect(() => {
     let active = true;
     const initAPI = async () => {
       const startTime = Date.now();
-      // Poll until the bootstrap script loads and window.google.maps exists
-      while (!window.google || !window.google.maps || !window.google.maps.importLibrary) {
-        if (Date.now() - startTime > 10000) {
-          // Timeout after 10s
+      // Poll until gmp-map-3d custom element is defined (registered by the bootstrap script)
+      while (!customElements.get('gmp-map-3d')) {
+        if (Date.now() - startTime > 15000) {
           if (active) setApiError(true);
           return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 150));
       }
-
-      try {
-        // Force-load the maps3d library which registers the custom elements in the browser
-        await window.google.maps.importLibrary("maps3d");
-        if (active) {
-          setApiLoaded(true);
-        }
-      } catch (err) {
-        console.error("Failed to load maps3d library:", err);
-        if (active) setApiError(true);
-      }
+      if (active) setApiLoaded(true);
     };
 
     initAPI();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
-  // Sync starting location when round changes
+  // Prevent native scroll wheel zoom and auto-tilt
   useEffect(() => {
-    if (targetLocation) {
-      positionRef.current = {
-        lat: targetLocation.lat,
-        lng: targetLocation.lng,
-        altitude: 50, // 50m above ground
+    if (!apiLoaded) return;
+    const mapEl = mapRef.current;
+    if (mapEl) {
+      const handleWheel = (e: WheelEvent) => {
+        e.preventDefault();
       };
-      headingRef.current = 0;
+      mapEl.addEventListener("wheel", handleWheel, { passive: false });
+      return () => {
+        mapEl.removeEventListener("wheel", handleWheel);
+      };
     }
-  }, [targetLocation]);
+  }, [apiLoaded]);
+
+  const targetLat = targetLocation?.lat;
+  const targetLng = targetLocation?.lng;
+
+  // Sync starting location and query elevation when round changes or API loads
+  useEffect(() => {
+    if (targetLat != null && targetLng != null) {
+      const isSameLocation = positionRef.current && 
+                             positionRef.current.lat === targetLat && 
+                             positionRef.current.lng === targetLng;
+
+      if (!isSameLocation) {
+        // Set a sensible starting altitude (300m MSL fallback) immediately so we don't spawn underground
+        positionRef.current = {
+          lat: targetLat,
+          lng: targetLng,
+          altitude: 300,
+        };
+        headingRef.current = 0;
+      }
+
+      if (apiLoaded) {
+        // Query the actual elevation from Google Maps ElevationService
+        const queryElevation = () => {
+          try {
+            const ElevationService = (window as any).google?.maps?.ElevationService;
+            if (ElevationService) {
+              const elevator = new ElevationService();
+              elevator.getElevationForLocations({
+                locations: [{ lat: targetLat, lng: targetLng }]
+              }, (results: any, status: any) => {
+                if (status === "OK" && results && results[0]) {
+                  const elev = results[0].elevation;
+                  console.log("Resolved ground elevation:", elev);
+                  positionRef.current = {
+                    lat: targetLat,
+                    lng: targetLng,
+                    altitude: elev + 40, // 40 meters above resolved ground level
+                  };
+                }
+              });
+            }
+          } catch (e) {
+            console.error("Failed to query ground elevation:", e);
+          }
+        };
+
+        queryElevation();
+      }
+    }
+  }, [targetLat, targetLng, apiLoaded]);
 
   // Key Event Listeners
   useEffect(() => {
@@ -116,6 +159,8 @@ export function GoogleMap3D({
       if (key === "s" || e.key === "ArrowDown") keys.current.s = true;
       if (key === "a" || e.key === "ArrowLeft") keys.current.a = true;
       if (key === "d" || e.key === "ArrowRight") keys.current.d = true;
+      if (key === "q") keys.current.q = true;
+      if (key === "e") keys.current.e = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -124,6 +169,8 @@ export function GoogleMap3D({
       if (key === "s" || e.key === "ArrowDown") keys.current.s = false;
       if (key === "a" || e.key === "ArrowLeft") keys.current.a = false;
       if (key === "d" || e.key === "ArrowRight") keys.current.d = false;
+      if (key === "q") keys.current.q = false;
+      if (key === "e") keys.current.e = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -135,13 +182,21 @@ export function GoogleMap3D({
     };
   }, []);
 
+  const cameraTiltRef = useRef<number>(65);
+
+  const onLocationChangeRef = useRef(onLocationChange);
+  useEffect(() => {
+    onLocationChangeRef.current = onLocationChange;
+  }, [onLocationChange]);
+
   // Main Flight & Camera Loop
   useEffect(() => {
-    if (!apiLoaded || !targetLocation) return;
+    if (!apiLoaded || targetLat == null || targetLng == null) return;
 
     let animFrameId: number;
     let lastTime = performance.now();
     let lastSocketSendTime = 0;
+    let initialized = false;
 
     const loop = (time: number) => {
       const dt = (time - lastTime) / 1000; // time delta in seconds
@@ -155,20 +210,69 @@ export function GoogleMap3D({
       const pos = positionRef.current;
 
       if (mapEl && droneEl && pos) {
-        // 1. Rotation control (A/D)
-        const ROTATION_SPEED = 110; // degrees per second
-        if (keys.current.a) {
-          headingRef.current = (headingRef.current - ROTATION_SPEED * clampedDt + 360) % 360;
-        }
-        if (keys.current.d) {
-          headingRef.current = (headingRef.current + ROTATION_SPEED * clampedDt) % 360;
+        // Read camera heading and tilt from map element
+        let currentHeading = mapEl.heading ?? headingRef.current;
+        let currentTilt = mapEl.tilt ?? cameraTiltRef.current;
+
+        // Clamp camera tilt to maintain a good viewing angle (prevent flipping or looking straight down)
+        if (currentTilt > 85) {
+          currentTilt = 85;
+        } else if (currentTilt < 40) {
+          currentTilt = 40;
         }
 
-        // 2. Translational forward/backward control (W/S)
-        const MAX_SPEED = 35; // meters per second
+        // Save them to refs
+        headingRef.current = currentHeading;
+        cameraTiltRef.current = currentTilt;
+
+        // Initialize camera on first frame
+        if (!initialized) {
+          initialized = true;
+          mapEl.center = { lat: pos.lat, lng: pos.lng, altitude: pos.altitude };
+          mapEl.tilt = currentTilt;
+          mapEl.heading = currentHeading;
+          mapEl.range = 94;
+        }
+
+        // 1. Rotation control (A/D) - rotates the camera heading
+        const ROTATION_SPEED = 90; // degrees per second
+        let headingChanged = false;
+        if (keys.current.a) {
+          currentHeading = (currentHeading - ROTATION_SPEED * clampedDt + 360) % 360;
+          headingChanged = true;
+        }
+        if (keys.current.d) {
+          currentHeading = (currentHeading + ROTATION_SPEED * clampedDt) % 360;
+          headingChanged = true;
+        }
+
+        if (headingChanged) {
+          mapEl.heading = currentHeading;
+          headingRef.current = currentHeading;
+        }
+
+        // 1.5. Tilt control (Q/E) - tilts the camera up and down
+        const TILT_SPEED = 45; // degrees per second
+        let tiltChanged = false;
+        if (keys.current.q) {
+          currentTilt = Math.max(40, currentTilt - TILT_SPEED * clampedDt);
+          tiltChanged = true;
+        }
+        if (keys.current.e) {
+          currentTilt = Math.min(85, currentTilt + TILT_SPEED * clampedDt);
+          tiltChanged = true;
+        }
+
+        if (tiltChanged) {
+          mapEl.tilt = currentTilt;
+          cameraTiltRef.current = currentTilt;
+        }
+
+        // 2. Translational forward/backward control (W/S) relative to current camera heading
+        const MAX_SPEED = 50; // meters per second
         if (keys.current.w || keys.current.s) {
           const dir = keys.current.w ? 1 : -1;
-          const headingRad = (headingRef.current * Math.PI) / 180;
+          const headingRad = (currentHeading * Math.PI) / 180;
           const dLatDir = Math.cos(headingRad);
           const dLngDir = Math.sin(headingRad);
 
@@ -195,20 +299,21 @@ export function GoogleMap3D({
           roll: 0,
         };
 
-        // 4. Update camera to follow drone
+        // 4. Always track drone position with camera center (smooth follow)
+        //    Explicitly re-apply heading, tilt, and range to prevent mapEl.center resets from overriding them
         mapEl.center = {
           lat: pos.lat,
           lng: pos.lng,
           altitude: pos.altitude,
         };
-        mapEl.heading = headingRef.current;
-        mapEl.tilt = 65; // looking down at a nice angle
-        mapEl.range = 40; // distance behind drone in meters
+        mapEl.heading = currentHeading;
+        mapEl.tilt = currentTilt;
+        mapEl.range = 94;
 
         // 5. Throttled websocket position update (20Hz)
         if (time - lastSocketSendTime > 50) {
           lastSocketSendTime = time;
-          onLocationChange(pos.lat, pos.lng);
+          onLocationChangeRef.current(pos.lat, pos.lng);
         }
       }
 
@@ -217,7 +322,8 @@ export function GoogleMap3D({
 
     animFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animFrameId);
-  }, [apiLoaded, targetLocation, onLocationChange]);
+  }, [apiLoaded, targetLat, targetLng]);
+
 
   if (apiError) {
     return (
@@ -264,27 +370,42 @@ export function GoogleMap3D({
       <gmp-map-3d
         ref={mapRef}
         style={{ width: "100%", height: "100%", display: "block" }}
+        center={targetLocation ? { lat: targetLocation.lat, lng: targetLocation.lng } : undefined}
+        tilt={65}
+        range={94}
+        mode="SATELLITE"
       >
-        {/* Local Player Drone (Binary glTF Cube served locally) */}
+        {/* Local Player Drone – scale must be set as a JS property (number), not HTML attribute */}
         {targetLocation && (
           <gmp-model-3d
-            ref={droneRef}
+            ref={(el: any) => {
+              droneRef.current = el;
+              if (el) el.scale = 1.5; // numeric, not a string attribute
+            }}
             src="/models/drone.glb"
-            altitude-mode="relative-to-ground"
-            scale="1.5"
+            altitude-mode="absolute"
           />
         )}
 
         {/* Other Players (Rendered as distinct 3D Markers/Models) */}
         {targetLocation &&
-          players.map((p) => {
-            if (p.id === localPlayerId) return null;
-            return (
-              <gmp-marker-3d
-                key={p.id}
-                position={`${p.lat}, ${p.lng}, 50`}
+          players.flatMap((p) => {
+            if (p.id === localPlayerId) return [];
+            return [
+              <gmp-model-3d
+                key={`model-${p.id}`}
+                ref={(el: any) => {
+                  if (el) el.scale = 1.5;
+                }}
+                src="/models/drone.glb"
+                position={{ lat: p.lat, lng: p.lng, altitude: 40 }}
                 altitude-mode="relative-to-ground"
-                extruded="true"
+              />,
+              <gmp-marker-3d
+                key={`marker-${p.id}`}
+                position={{ lat: p.lat, lng: p.lng, altitude: 50 }}
+                altitude-mode="relative-to-ground"
+                extruded={true}
               >
                 {/* Visual Label showing player's name tag in 3D space */}
                 <div
@@ -305,7 +426,7 @@ export function GoogleMap3D({
                   🛸 {p.nickname}
                 </div>
               </gmp-marker-3d>
-            );
+            ];
           })}
       </gmp-map-3d>
     </div>

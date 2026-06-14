@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
 
 type MapPlayer = {
   id: string;
@@ -53,42 +53,26 @@ export function StreetViewPlay({ lat, lng, onLocationChange, players, localPlaye
     onLocationChangeRef.current = onLocationChange;
   }, [onLocationChange]);
 
-  // Dynamic loading of Google Maps API
+  // Wait for Google Maps API to be loaded by index.html
   useEffect(() => {
-    if (window.google && window.google.maps) {
-      setLoaded(true);
-      return;
-    }
+    let active = true;
+    const startTime = Date.now();
 
-    const scriptId = "google-maps-script";
-    let script = document.getElementById(scriptId) as HTMLScriptElement;
-
-    if (!script) {
-      script = document.createElement("script");
-      script.id = scriptId;
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&v=weekly`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-
-    const handleScriptLoad = () => {
-      setLoaded(true);
+    const poll = async () => {
+      while (!window.google || !window.google.maps) {
+        if (Date.now() - startTime > 15000) {
+          if (active) setScriptError(true);
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (active) setLoaded(true);
     };
 
-    const handleScriptError = () => {
-      setScriptError(true);
-      console.error("Failed to load Google Maps SDK script.");
-    };
-
-    script.addEventListener("load", handleScriptLoad);
-    script.addEventListener("error", handleScriptError);
-
-    return () => {
-      script.removeEventListener("load", handleScriptLoad);
-      script.removeEventListener("error", handleScriptError);
-    };
+    poll();
+    return () => { active = false; };
   }, []);
+
 
   // Initialize Street View Panorama
   useEffect(() => {

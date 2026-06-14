@@ -17,17 +17,41 @@ type Player = {
 
 type GameStatus = "LOBBY" | "ROUND_ACTIVE" | "ROUND_RESULTS" | "GAME_OVER";
 
-const LOCATIONS = [
-  { lat: 52.2304, lng: 21.0044, name: "Pałac Kultury i Nauki (ul. Emilii Plater), Warszawa" },
-  { lat: 50.0626, lng: 19.9388, name: "Rynek Główny (przy Sukiennicach), Kraków" },
-  { lat: 51.1098, lng: 17.0315, name: "Rynek we Wrocławiu, Wrocław" },
-  { lat: 54.3486, lng: 18.6533, name: "Długi Targ (przy Fontannie Neptuna), Gdańsk" },
-  { lat: 52.4082, lng: 16.9348, name: "Stary Rynek (przy Ratuszu), Poznań" },
-  { lat: 49.2958, lng: 19.9519, name: "Krupówki (deptak), Zakopane" },
-  { lat: 53.0103, lng: 18.6046, name: "Rynek Staromiejski (przy Pomniku Kopernika), Toruń" },
-  { lat: 51.1143, lng: 17.0462, name: "Ostrów Tumski (przy Katedrze), Wrocław" },
-  { lat: 54.0405, lng: 19.0238, name: "Zamek w Malborku (most pieszy), Malbork" },
-  { lat: 54.4443, lng: 18.5645, name: "Deptak Bohaterów Monte Cassino, Sopot" }
+type Location = {
+  lat: number;
+  lng: number;
+  name: string;
+  modes: ("2D" | "3D")[];
+};
+
+const LOCATIONS: Location[] = [
+  { lat: 52.2304, lng: 21.0044, name: "Pałac Kultury i Nauki (ul. Emilii Plater), Warszawa", modes: ["2D", "3D"] },
+  { lat: 50.0626, lng: 19.9388, name: "Rynek Główny (przy Sukiennicach), Kraków", modes: ["2D", "3D"] },
+  { lat: 51.1098, lng: 17.0315, name: "Rynek we Wrocławiu, Wrocław", modes: ["2D", "3D"] },
+  { lat: 54.3486, lng: 18.6533, name: "Długi Targ (przy Fontannie Neptuna), Gdańsk", modes: ["2D", "3D"] },
+  { lat: 52.4082, lng: 16.9348, name: "Stary Rynek (przy Ratuszu), Poznań", modes: ["2D", "3D"] },
+  { lat: 49.2958, lng: 19.9519, name: "Krupówki (deptak), Zakopane", modes: ["2D"] },
+  { lat: 53.0103, lng: 18.6046, name: "Rynek Staromiejski (przy Pomniku Kopernika), Toruń", modes: ["2D"] },
+  { lat: 51.1143, lng: 17.0462, name: "Ostrów Tumski (przy Katedrze), Wrocław", modes: ["2D", "3D"] },
+  { lat: 54.0405, lng: 19.0238, name: "Zamek w Malborku (most pieszy), Malbork", modes: ["2D"] },
+  { lat: 54.4443, lng: 18.5645, name: "Deptak Bohaterów Monte Cassino, Sopot", modes: ["2D", "3D"] },
+  
+  // New 3D and 2D verified locations:
+  { lat: 52.2299, lng: 20.9841, name: "Warsaw Spire (Rondo Daszyńskiego), Warszawa", modes: ["2D", "3D"] },
+  { lat: 52.2473, lng: 21.0136, name: "Plac Zamkowy (przy Kolumnie Zygmunta), Warszawa", modes: ["2D", "3D"] },
+  { lat: 52.2158, lng: 21.0353, name: "Pałac na Wyspie (Łazienki Królewskie), Warszawa", modes: ["2D", "3D"] },
+  { lat: 50.0541, lng: 19.9367, name: "Wawel (Zamek Królewski - dziedziniec), Kraków", modes: ["2D", "3D"] },
+  { lat: 50.0652, lng: 19.9416, name: "Barbakan krakowski, Kraków", modes: ["2D", "3D"] },
+  { lat: 51.1070, lng: 17.0772, name: "Hala Stulecia (przed Iglicą), Wrocław", modes: ["2D", "3D"] },
+  { lat: 54.3484, lng: 18.6558, name: "Zielona Brama (ul. Długa), Gdańsk", modes: ["2D", "3D"] },
+  { lat: 54.3562, lng: 18.6607, name: "Muzeum II Wojny Światowej, Gdańsk", modes: ["2D", "3D"] },
+  { lat: 51.7796, lng: 19.4478, name: "Rynek Manufaktury, Łódź", modes: ["2D", "3D"] },
+  { lat: 51.7686, lng: 19.4563, name: "Ulica Piotrkowska, Łódź", modes: ["2D", "3D"] },
+  { lat: 52.4080, lng: 16.9298, name: "Plac Wolności, Poznań", modes: ["2D", "3D"] },
+  { lat: 51.2476, lng: 22.5683, name: "Brama Krakowska, Lublin", modes: ["2D", "3D"] },
+  { lat: 51.2505, lng: 22.5719, name: "Zamek w Lublinie (dziedziniec), Lublin", modes: ["2D", "3D"] },
+  { lat: 53.4302, lng: 14.5654, name: "Wały Chrobrego, Szczecin", modes: ["2D", "3D"] },
+  { lat: 50.0374, lng: 22.0049, name: "Rynek (przy Ratuszu), Rzeszów", modes: ["2D", "3D"] }
 ];
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -246,11 +270,16 @@ export default class GameServer implements Party.Server {
     this.countdownActive = false;
     this.timeRemaining = this.roundTimeLimit > 0 ? this.roundTimeLimit : 999999;
 
-    // Pick a random location
-    let availableIndices = LOCATIONS.map((_, i) => i).filter(i => !this.usedLocationIndices.has(i));
+    // Pick a random location supporting the current gameMode
+    let availableIndices = LOCATIONS
+      .map((_, i) => i)
+      .filter(i => LOCATIONS[i].modes.includes(this.gameMode) && !this.usedLocationIndices.has(i));
+
     if (availableIndices.length === 0) {
       this.usedLocationIndices.clear();
-      availableIndices = LOCATIONS.map((_, i) => i);
+      availableIndices = LOCATIONS
+        .map((_, i) => i)
+        .filter(i => LOCATIONS[i].modes.includes(this.gameMode));
     }
     
     const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];

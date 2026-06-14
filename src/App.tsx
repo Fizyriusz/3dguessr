@@ -388,7 +388,6 @@ function App() {
         </div>
       )}
 
-      {/* 3. Players & Settings Sidebar List (ROUND_ACTIVE & LOBBY) */}
       {hasJoined && (gameState.status === "ROUND_ACTIVE" || gameState.status === "LOBBY") && (
         <div 
           className="glass-panel"
@@ -601,18 +600,58 @@ function App() {
               style={{
                 position: "absolute",
                 bottom: "20px",
-                left: "20px",
+                left: "50%",
+                transform: "translateX(-50%)",
                 padding: "10px 20px",
                 fontSize: "13px",
                 color: "#818cf8",
                 fontWeight: 600,
                 zIndex: 100,
                 pointerEvents: "none",
-                borderLeft: "4px solid #6366f1"
+                borderLeft: "4px solid #6366f1",
+                whiteSpace: "nowrap"
               }}
             >
-              🛸 Tryb 3D: Pilotowanie drona | ⌨️ Sterowanie: **[W][S]** (Przód/Tył), **[A][D]** (Obrót kamery) | Wysokość zablokowana na 50m
+              🛸 Tryb 3D: [W]/[S] — Przód/Tył &nbsp;|&nbsp; [A]/[D] — Obrót &nbsp;|&nbsp; [Q]/[E] — Kamera góra/dół &nbsp;|&nbsp; 🖱️ Mysz — Kamera
             </div>
+
+            {/* Guess submission button in 3D mode */}
+            {!hasGuessed && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "20px",
+                  right: "20px",
+                  zIndex: 100,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: "10px"
+                }}
+              >
+                <div className="glass-panel" style={{ padding: "8px 14px", fontSize: "12px", color: "var(--text-secondary)", textAlign: "center" }}>
+                  Zbadaj okolicę, a następnie oddaj typ na mapie poniżej
+                </div>
+              </div>
+            )}
+            {hasGuessed && (
+              <div
+                className="glass-panel animate-fade-in"
+                style={{
+                  position: "absolute",
+                  top: "20px",
+                  right: "20px",
+                  zIndex: 100,
+                  padding: "10px 16px",
+                  fontSize: "13px",
+                  color: "#10b981",
+                  fontWeight: 700,
+                  borderLeft: "4px solid #10b981"
+                }}
+              >
+                ✓ Typ oddany! Czekaj na wyniki...
+              </div>
+            )}
           </div>
         ) : (
           <div className="split-screen" style={{ zIndex: 5 }}>

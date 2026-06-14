@@ -224,8 +224,8 @@ export function GuessMap({ status, players, targetLocation, onGuessSubmit, hasGu
         transition: "all 0.5s cubic-bezier(0.16, 1, 0.3, 1)",
       }
     : {
-        width: isHovered ? "420px" : "320px",
-        height: isHovered ? "320px" : "220px",
+        width: isHovered ? "max(25vw, 480px)" : "320px",
+        height: isHovered ? "max(20vw, 380px)" : "220px",
         borderRadius: "16px",
         transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
       };
