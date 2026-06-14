@@ -3,9 +3,7 @@ import usePartySocket from "partysocket/react";
 import { StreetViewPlay } from "./components/StreetViewPlay";
 import { RoadMap } from "./components/RoadMap";
 import { GuessMap } from "./components/GuessMap";
-import { Canvas } from "@react-three/fiber";
-import { World3D } from "./components/World3D";
-import { DronePlayer } from "./components/DronePlayer";
+import { GoogleMap3D } from "./components/GoogleMap3D";
 import "./index.css";
 
 type Player = {
@@ -589,36 +587,31 @@ function App() {
       {hasJoined && gameState.status === "ROUND_ACTIVE" && (
         gameState.gameMode === "3D" ? (
           <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 5 }}>
-            <div style={{ width: "100%", height: "100%", background: "#0c0a09" }}>
-              <Canvas shadows camera={{ fov: 60, near: 0.1, far: 2000, position: [0, 55, 10] }}>
-                <World3D 
-                  targetLocation={gameState.targetLocation} 
-                  players={gameState.players}
-                  localPlayerId={socket.id}
-                />
-                <DronePlayer 
-                  targetLocation={gameState.targetLocation} 
-                  onLocationChange={handleLocationChange} 
-                />
-              </Canvas>
-              {/* Guide overlay for 3D Mode */}
-              <div 
-                className="glass-panel animate-fade-in"
-                style={{
-                  position: "absolute",
-                  bottom: "20px",
-                  left: "20px",
-                  padding: "10px 20px",
-                  fontSize: "13px",
-                  color: "#818cf8",
-                  fontWeight: 600,
-                  zIndex: 100,
-                  pointerEvents: "none",
-                  borderLeft: "4px solid #6366f1"
-                }}
-              >
-                🛸 Tryb 3D: Pilotowanie drona | ⌨️ Sterowanie: **[W][S]** (Przód/Tył) | **[A][D]** (Obrót kamery) | Wysokość zablokowana na 50m
-              </div>
+            {gameState.targetLocation && (
+              <GoogleMap3D 
+                targetLocation={gameState.targetLocation} 
+                players={gameState.players}
+                localPlayerId={socket.id}
+                onLocationChange={handleLocationChange}
+              />
+            )}
+            {/* Guide overlay for 3D Mode */}
+            <div 
+              className="glass-panel animate-fade-in"
+              style={{
+                position: "absolute",
+                bottom: "20px",
+                left: "20px",
+                padding: "10px 20px",
+                fontSize: "13px",
+                color: "#818cf8",
+                fontWeight: 600,
+                zIndex: 100,
+                pointerEvents: "none",
+                borderLeft: "4px solid #6366f1"
+              }}
+            >
+              🛸 Tryb 3D: Pilotowanie drona | ⌨️ Sterowanie: **[W][S]** (Przód/Tył), **[A][D]** (Obrót kamery) | Wysokość zablokowana na 50m
             </div>
           </div>
         ) : (
