@@ -191,12 +191,13 @@ function App() {
   };
 
   // Handle movements triggered inside StreetView
-  const handleLocationChange = (lat: number, lng: number) => {
+  const handleLocationChange = (lat: number, lng: number, heading?: number) => {
     if (gameState.status === "ROUND_ACTIVE") {
       socket.send(JSON.stringify({
         type: "update",
         lat,
-        lng
+        lng,
+        heading
       }));
     }
   };

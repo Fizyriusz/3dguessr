@@ -34,8 +34,10 @@ type GoogleMap3DProps = {
   targetLocation: { lat: number; lng: number } | null;
   players: any[];
   localPlayerId: string;
-  onLocationChange: (lat: number, lng: number) => void;
+  onLocationChange: (lat: number, lng: number, heading?: number) => void;
 };
+
+const DRONE_SCALE = 1.0; // Change this value to adjust the drone size in the environment
 
 export function GoogleMap3D({
   targetLocation,
@@ -313,7 +315,7 @@ export function GoogleMap3D({
         // 5. Throttled websocket position update (20Hz)
         if (time - lastSocketSendTime > 50) {
           lastSocketSendTime = time;
-          onLocationChangeRef.current(pos.lat, pos.lng);
+          onLocationChangeRef.current(pos.lat, pos.lng, headingRef.current);
         }
       }
 
@@ -380,9 +382,9 @@ export function GoogleMap3D({
           <gmp-model-3d
             ref={(el: any) => {
               droneRef.current = el;
-              if (el) el.scale = 1.5; // numeric, not a string attribute
+              if (el) el.scale = DRONE_SCALE;
             }}
-            src="/models/drone.glb"
+            src="/models/sample.glb"
             altitude-mode="absolute"
           />
         )}
@@ -395,11 +397,12 @@ export function GoogleMap3D({
               <gmp-model-3d
                 key={`model-${p.id}`}
                 ref={(el: any) => {
-                  if (el) el.scale = 1.5;
+                  if (el) el.scale = DRONE_SCALE;
                 }}
-                src="/models/drone.glb"
+                src="/models/sample.glb"
                 position={{ lat: p.lat, lng: p.lng, altitude: 40 }}
                 altitude-mode="relative-to-ground"
+                orientation={{ heading: p.heading ?? 0, tilt: 0, roll: 0 }}
               />,
               <gmp-marker-3d
                 key={`marker-${p.id}`}

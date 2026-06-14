@@ -13,6 +13,7 @@ type Player = {
   // Realtime geographical coordinates of the player's bean
   lat: number;
   lng: number;
+  heading?: number;
 };
 
 type GameStatus = "LOBBY" | "ROUND_ACTIVE" | "ROUND_RESULTS" | "GAME_OVER";
@@ -125,7 +126,8 @@ export default class GameServer implements Party.Server {
             distance: null,
             isHost: isHost,
             lat: 52.2304,
-            lng: 21.0044
+            lng: 21.0044,
+            heading: 0
           });
         } else {
           const p = this.players.get(sender.id)!;
@@ -148,6 +150,9 @@ export default class GameServer implements Party.Server {
           // Realtime 2D coordinates sync
           player.lat = Number(data.lat);
           player.lng = Number(data.lng);
+          if (data.heading !== undefined) {
+            player.heading = Number(data.heading);
+          }
           break;
 
         case "configure":
@@ -296,6 +301,7 @@ export default class GameServer implements Party.Server {
       // Reset position to round start position
       p.lat = this.targetLocation.lat;
       p.lng = this.targetLocation.lng;
+      p.heading = 0;
     }
 
     if (this.timerInterval) clearInterval(this.timerInterval);
@@ -350,6 +356,7 @@ export default class GameServer implements Party.Server {
       p.distance = null;
       p.lat = 52.2304;
       p.lng = 21.0044;
+      p.heading = 0;
     }
   }
 
