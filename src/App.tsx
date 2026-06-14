@@ -3,6 +3,9 @@ import usePartySocket from "partysocket/react";
 import { StreetViewPlay } from "./components/StreetViewPlay";
 import { RoadMap } from "./components/RoadMap";
 import { GuessMap } from "./components/GuessMap";
+import { Canvas } from "@react-three/fiber";
+import { World3D } from "./components/World3D";
+import { DronePlayer } from "./components/DronePlayer";
 import "./index.css";
 
 type Player = {
@@ -31,6 +34,7 @@ type GameState = {
   timeRemaining: number;
   targetLocation: { lat: number; lng: number; name: string } | null;
   players: Player[];
+  gameMode: "2D" | "3D";
 };
 
 function App() {
@@ -53,6 +57,7 @@ function App() {
     timeRemaining: 60,
     targetLocation: null,
     players: [],
+    gameMode: "2D",
   });
 
   // Client visual states
@@ -174,7 +179,8 @@ function App() {
       totalRounds: settings.totalRounds ?? gameState.totalRounds,
       roundTimeLimit: settings.roundTimeLimit ?? gameState.roundTimeLimit,
       firstGuessTimerEnabled: settings.firstGuessTimerEnabled ?? gameState.firstGuessTimerEnabled,
-      firstGuessTimerDuration: settings.firstGuessTimerDuration ?? gameState.firstGuessTimerDuration
+      firstGuessTimerDuration: settings.firstGuessTimerDuration ?? gameState.firstGuessTimerDuration,
+      gameMode: settings.gameMode ?? gameState.gameMode
     }));
   };
 
@@ -483,6 +489,18 @@ function App() {
                   <h4 style={{ margin: 0, fontSize: "13px", color: "var(--text-color)", fontWeight: 800 }}>Ustawienia gry (Host)</h4>
                   
                   <div className="settings-group">
+                    <label className="settings-label">Tryb gry</label>
+                    <select 
+                      className="settings-select"
+                      value={gameState.gameMode || "2D"}
+                      onChange={(e) => handleConfigChange({ gameMode: e.target.value as "2D" | "3D" })}
+                    >
+                      <option value="2D">2D (Street View)</option>
+                      <option value="3D">3D (Lot drona)</option>
+                    </select>
+                  </div>
+
+                  <div className="settings-group">
                     <label className="settings-label">Liczba rund</label>
                     <select 
                       className="settings-select"
@@ -541,6 +559,7 @@ function App() {
                 <>
                   <h4 style={{ margin: 0, fontSize: "13px", color: "var(--text-color)", fontWeight: 800 }}>Ustawienia gry</h4>
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12px", color: "var(--text-secondary)" }}>
+                    <div>Tryb gry: <b style={{ color: "var(--text-color)" }}>{gameState.gameMode === "3D" ? "3D (Lot drona)" : "2D (Street View)"}</b></div>
                     <div>Liczba rund: <b style={{ color: "var(--text-color)" }}>{gameState.totalRounds}</b></div>
                     <div>Czas na rundę: <b style={{ color: "var(--text-color)" }}>{gameState.roundTimeLimit > 0 ? `${gameState.roundTimeLimit}s` : "Brak limitu (∞)"}</b></div>
                     <div>Czas po pierwszym typie: <b style={{ color: "var(--text-color)" }}>{gameState.firstGuessTimerEnabled ? `${gameState.firstGuessTimerDuration}s` : "Wyłączony"}</b></div>
@@ -569,34 +588,66 @@ function App() {
       {/* 4. Active Game Split Screen (ROUND_ACTIVE) */}
       {hasJoined && gameState.status === "ROUND_ACTIVE" && (
         <div className="split-screen" style={{ zIndex: 5 }}>
-          {/* Left panel: Interactive Street View */}
+          {/* Left panel: Interactive Street View or 3D Drone Flight */}
           <div style={{ position: "relative", width: "100%", height: "100%" }}>
-            {gameState.targetLocation && (
-              <StreetViewPlay
-                lat={localPlayer ? localPlayer.lat : gameState.targetLocation.lat}
-                lng={localPlayer ? localPlayer.lng : gameState.targetLocation.lng}
-                onLocationChange={handleLocationChange}
-                players={gameState.players}
-                localPlayerId={socket.id}
-              />
+            {gameState.gameMode === "3D" ? (
+              <div style={{ width: "100%", height: "100%", background: "#0c0a09" }}>
+                <Canvas shadows camera={{ fov: 60, near: 0.1, far: 2000, position: [0, 55, 10] }}>
+                  <World3D targetLocation={gameState.targetLocation} />
+                  <DronePlayer 
+                    targetLocation={gameState.targetLocation} 
+                    onLocationChange={handleLocationChange} 
+                  />
+                </Canvas>
+                {/* Guide overlay for 3D Mode */}
+                <div 
+                  className="glass-panel animate-fade-in"
+                  style={{
+                    position: "absolute",
+                    bottom: "20px",
+                    left: "20px",
+                    padding: "10px 20px",
+                    fontSize: "13px",
+                    color: "#818cf8",
+                    fontWeight: 600,
+                    zIndex: 100,
+                    pointerEvents: "none",
+                    borderLeft: "4px solid #6366f1"
+                  }}
+                >
+                  🛸 Tryb 3D: Pilotowanie drona | ⌨️ Sterowanie: **[W][A][S][D]** (Ruch w poziomie) | Wysokość zablokowana na 50m
+                </div>
+              </div>
+            ) : (
+              <>
+                {gameState.targetLocation && (
+                  <StreetViewPlay
+                    lat={localPlayer ? localPlayer.lat : gameState.targetLocation.lat}
+                    lng={localPlayer ? localPlayer.lng : gameState.targetLocation.lng}
+                    onLocationChange={handleLocationChange}
+                    players={gameState.players}
+                    localPlayerId={socket.id}
+                  />
+                )}
+                {/* Guide overlay */}
+                <div 
+                  className="glass-panel"
+                  style={{
+                    position: "absolute",
+                    bottom: "20px",
+                    left: "20px",
+                    padding: "10px 20px",
+                    fontSize: "13px",
+                    color: "#fbbf24",
+                    fontWeight: 600,
+                    zIndex: 100,
+                    pointerEvents: "none"
+                  }}
+                >
+                  ⌨️ Sterowanie: [W]/[S] - Idź przód/tył | [A]/[D] - Obrót kamery
+                </div>
+              </>
             )}
-            {/* Guide overlay */}
-            <div 
-              className="glass-panel"
-              style={{
-                position: "absolute",
-                bottom: "20px",
-                left: "20px",
-                padding: "10px 20px",
-                fontSize: "13px",
-                color: "#fbbf24",
-                fontWeight: 600,
-                zIndex: 100,
-                pointerEvents: "none"
-              }}
-            >
-              ⌨️ Sterowanie: [W]/[S] - Idź przód/tył | [A]/[D] - Obrót kamery
-            </div>
           </div>
 
           {/* Right panel: Stylized Road Map showing the beans */}

@@ -59,6 +59,7 @@ export default class GameServer implements Party.Server {
   firstGuessTimerEnabled: boolean = false;
   firstGuessTimerDuration: number = 20; // seconds
   countdownActive: boolean = false;
+  gameMode: "2D" | "3D" = "2D";
   
   timeRemaining: number = 60; // active timer
   targetLocation: typeof LOCATIONS[0] | null = null;
@@ -132,6 +133,9 @@ export default class GameServer implements Party.Server {
             this.roundTimeLimit = Math.max(0, Math.min(600, Number(data.roundTimeLimit)));
             this.firstGuessTimerEnabled = Boolean(data.firstGuessTimerEnabled);
             this.firstGuessTimerDuration = Math.max(5, Math.min(120, Number(data.firstGuessTimerDuration)));
+            if (data.gameMode === "2D" || data.gameMode === "3D") {
+              this.gameMode = data.gameMode;
+            }
           }
           break;
 
@@ -331,6 +335,7 @@ export default class GameServer implements Party.Server {
       firstGuessTimerEnabled: this.firstGuessTimerEnabled,
       firstGuessTimerDuration: this.firstGuessTimerDuration,
       countdownActive: this.countdownActive,
+      gameMode: this.gameMode,
       
       timeRemaining: this.timeRemaining,
       targetLocation: this.targetLocation ? {
