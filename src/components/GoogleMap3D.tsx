@@ -37,7 +37,7 @@ type GoogleMap3DProps = {
   onLocationChange: (lat: number, lng: number, heading?: number) => void;
 };
 
-const DRONE_SCALE = 1.0; // Change this value to adjust the drone size in the environment
+const DRONE_SCALE = 30.0; // Change this value to adjust the drone size in the environment
 
 export function GoogleMap3D({
   targetLocation,
