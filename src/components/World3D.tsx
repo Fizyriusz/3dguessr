@@ -154,8 +154,8 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
                 }
               }}
               onLoadError={(e: any) => {
-                console.error("Tile load error:", e.error);
-                if (e.tile && e.tile.content && e.tile.content.uri) {
+                console.error("Tile load error:", e?.error || e);
+                if (e?.tile?.content?.uri) {
                   const uri = e.tile.content.uri;
                   const match = uri.match(/\/files\/([^./?]+)\.glb/);
                   if (match) {
