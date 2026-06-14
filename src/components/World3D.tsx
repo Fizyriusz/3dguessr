@@ -1,30 +1,22 @@
 import { TilesRenderer, TilesPlugin, TilesAttributionOverlay } from "3d-tiles-renderer/r3f";
-import { GoogleCloudAuthPlugin, TileCompressionPlugin } from "3d-tiles-renderer/plugins";
+import { CesiumIonAuthPlugin, TileCompressionPlugin } from "3d-tiles-renderer/plugins";
 import * as THREE from "three";
-import { useMemo, useRef, useEffect, useCallback } from "react";
-import { useThree } from "@react-three/fiber";
+import { useMemo, useRef, useCallback } from "react";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-const GOOGLE_AUTH_ARGS = [{ apiToken: API_KEY }];
+const CESIUM_ION_ACCESS_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN || "";
+const CESIUM_AUTH_ARGS = [{ apiToken: CESIUM_ION_ACCESS_TOKEN, assetId: 96188 }];
 
 // Initialize DRACOLoader once
 const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/");
 
-const ktx2Loader = new KTX2Loader();
-ktx2Loader.setTranscoderPath("https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/");
+
 
 export function World3D({ targetLocation }: { targetLocation: { lat: number; lng: number } | null }) {
-  const { gl } = useThree();
   const tilesRef = useRef<any>(null);
   const failedUrls = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    ktx2Loader.detectSupport(gl);
-  }, [gl]);
 
   const onTilesRendererRef = useCallback((tiles: any) => {
     if (tiles) {
@@ -37,11 +29,10 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
       tiles.downloadQueue.maxJobs = 64;
       tiles.lruCache.maxBytesSize = 2048 * 1024 * 1024; // 2GB
 
-      // Configure GLTFLoader to use DRACOLoader and KTX2Loader for compressed Google Tiles
+      // Configure GLTFLoader to use DRACOLoader for compressed Cesium Tiles
       const manager = tiles.manager;
       const gltfLoader = new GLTFLoader(manager);
       gltfLoader.setDRACOLoader(dracoLoader);
-      gltfLoader.setKTX2Loader(ktx2Loader);
       
       manager.addHandler(/\.gltf$/, gltfLoader);
       manager.addHandler(/\.glb$/, gltfLoader);
@@ -166,7 +157,7 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
                 }
               }}
             >
-              <TilesPlugin plugin={GoogleCloudAuthPlugin} args={GOOGLE_AUTH_ARGS} />
+              <TilesPlugin plugin={CesiumIonAuthPlugin} args={CESIUM_AUTH_ARGS} />
               <TilesPlugin plugin={TileCompressionPlugin} />
               <TilesAttributionOverlay />
             </TilesRenderer>
