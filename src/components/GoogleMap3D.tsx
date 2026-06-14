@@ -37,7 +37,7 @@ type GoogleMap3DProps = {
   onLocationChange: (lat: number, lng: number, heading?: number) => void;
 };
 
-const DRONE_SCALE = 2.0; // Change this value to adjust the drone size in the environment
+const DRONE_SCALE = 22.0; // Change this value to adjust the drone size in the environment
 
 const lerpAngle = (current: number, target: number, step: number) => {
   let diff = ((target - current + 180) % 360) - 180;
