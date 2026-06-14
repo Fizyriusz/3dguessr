@@ -37,7 +37,12 @@ type GoogleMap3DProps = {
   onLocationChange: (lat: number, lng: number, heading?: number) => void;
 };
 
-const DRONE_SCALE = 30.0; // Change this value to adjust the drone size in the environment
+const DRONE_SCALE = 2.0; // Change this value to adjust the drone size in the environment
+
+const lerpAngle = (current: number, target: number, step: number) => {
+  let diff = ((target - current + 180) % 360) - 180;
+  return (current + diff * step + 360) % 360;
+};
 
 export function GoogleMap3D({
   targetLocation,
@@ -54,6 +59,9 @@ export function GoogleMap3D({
   // Flight states (held in refs for requestAnimationFrame speed/concurrency)
   const positionRef = useRef<{ lat: number; lng: number; altitude: number } | null>(null);
   const headingRef = useRef<number>(0); // 0 = North, 90 = East, 180 = South, 270 = West
+  const droneHeadingRef = useRef<number>(0);
+  const droneTiltRef = useRef<number>(0);
+  const droneRollRef = useRef<number>(0);
 
   // Keyboard controls state
   const keys = useRef({ w: false, s: false, a: false, d: false, q: false, e: false });
@@ -289,6 +297,25 @@ export function GoogleMap3D({
           pos.lng += lngSpeed * clampedDt;
         }
 
+        // Drone heading logic
+        let targetDroneHeading = droneHeadingRef.current;
+        if (keys.current.w) {
+          targetDroneHeading = currentHeading;
+        } else if (keys.current.s) {
+          targetDroneHeading = (currentHeading + 180) % 360;
+        }
+        
+        // Smoothly interpolate current drone heading towards target
+        droneHeadingRef.current = lerpAngle(droneHeadingRef.current, targetDroneHeading, Math.min(1, 10 * clampedDt));
+
+        // Drone tilt (pitch) logic
+        const targetTiltVal = keys.current.w ? 10 : (keys.current.s ? -10 : 0);
+        droneTiltRef.current = droneTiltRef.current + (targetTiltVal - droneTiltRef.current) * Math.min(1, 8 * clampedDt);
+
+        // Drone roll logic
+        const targetRollVal = keys.current.a ? -15 : (keys.current.d ? 15 : 0);
+        droneRollRef.current = droneRollRef.current + (targetRollVal - droneRollRef.current) * Math.min(1, 8 * clampedDt);
+
         // 3. Update local drone model properties
         droneEl.position = {
           lat: pos.lat,
@@ -296,9 +323,9 @@ export function GoogleMap3D({
           altitude: pos.altitude,
         };
         droneEl.orientation = {
-          heading: headingRef.current,
-          tilt: 0,
-          roll: 0,
+          heading: droneHeadingRef.current,
+          tilt: droneTiltRef.current,
+          roll: droneRollRef.current,
         };
 
         // 4. Always track drone position with camera center (smooth follow)
@@ -315,7 +342,7 @@ export function GoogleMap3D({
         // 5. Throttled websocket position update (20Hz)
         if (time - lastSocketSendTime > 50) {
           lastSocketSendTime = time;
-          onLocationChangeRef.current(pos.lat, pos.lng, headingRef.current);
+          onLocationChangeRef.current(pos.lat, pos.lng, droneHeadingRef.current);
         }
       }
 
