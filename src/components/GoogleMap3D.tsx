@@ -106,7 +106,7 @@ export function GoogleMap3D({
   const targetLat = targetLocation?.lat;
   const targetLng = targetLocation?.lng;
 
-  // Sync starting location and query elevation when round changes or API loads
+  // Sync starting location when round changes or API loads
   useEffect(() => {
     if (targetLat != null && targetLng != null) {
       const isSameLocation = positionRef.current && 
@@ -114,45 +114,15 @@ export function GoogleMap3D({
                              positionRef.current.lng === targetLng;
 
       if (!isSameLocation) {
-        // Set a sensible starting altitude (300m MSL fallback) immediately so we don't spawn underground
         positionRef.current = {
           lat: targetLat,
           lng: targetLng,
-          altitude: 300,
+          altitude: 40, // 40m relative to ground
         };
         headingRef.current = 0;
       }
-
-      if (apiLoaded) {
-        // Query the actual elevation from Google Maps ElevationService
-        const queryElevation = () => {
-          try {
-            const ElevationService = (window as any).google?.maps?.ElevationService;
-            if (ElevationService) {
-              const elevator = new ElevationService();
-              elevator.getElevationForLocations({
-                locations: [{ lat: targetLat, lng: targetLng }]
-              }, (results: any, status: any) => {
-                if (status === "OK" && results && results[0]) {
-                  const elev = results[0].elevation;
-                  console.log("Resolved ground elevation:", elev);
-                  positionRef.current = {
-                    lat: targetLat,
-                    lng: targetLng,
-                    altitude: elev + 40, // 40 meters above resolved ground level
-                  };
-                }
-              });
-            }
-          } catch (e) {
-            console.error("Failed to query ground elevation:", e);
-          }
-        };
-
-        queryElevation();
-      }
     }
-  }, [targetLat, targetLng, apiLoaded]);
+  }, [targetLat, targetLng]);
 
   // Key Event Listeners
   useEffect(() => {
@@ -412,7 +382,7 @@ export function GoogleMap3D({
               if (el) el.scale = DRONE_SCALE;
             }}
             src="/models/sample.glb?v=2"
-            altitude-mode="absolute"
+            altitude-mode="relative-to-ground"
           />
         )}
 
