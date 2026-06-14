@@ -585,74 +585,78 @@ function App() {
         </div>
       )}
 
-      {/* 4. Active Game Split Screen (ROUND_ACTIVE) */}
+      {/* 4. Active Game Split Screen / Full Screen 3D (ROUND_ACTIVE) */}
       {hasJoined && gameState.status === "ROUND_ACTIVE" && (
-        <div className="split-screen" style={{ zIndex: 5 }}>
-          {/* Left panel: Interactive Street View or 3D Drone Flight */}
-          <div style={{ position: "relative", width: "100%", height: "100%" }}>
-            {gameState.gameMode === "3D" ? (
-              <div style={{ width: "100%", height: "100%", background: "#0c0a09" }}>
-                <Canvas shadows camera={{ fov: 60, near: 0.1, far: 2000, position: [0, 55, 10] }}>
-                  <World3D targetLocation={gameState.targetLocation} />
-                  <DronePlayer 
-                    targetLocation={gameState.targetLocation} 
-                    onLocationChange={handleLocationChange} 
-                  />
-                </Canvas>
-                {/* Guide overlay for 3D Mode */}
-                <div 
-                  className="glass-panel animate-fade-in"
-                  style={{
-                    position: "absolute",
-                    bottom: "20px",
-                    left: "20px",
-                    padding: "10px 20px",
-                    fontSize: "13px",
-                    color: "#818cf8",
-                    fontWeight: 600,
-                    zIndex: 100,
-                    pointerEvents: "none",
-                    borderLeft: "4px solid #6366f1"
-                  }}
-                >
-                  🛸 Tryb 3D: Pilotowanie drona | ⌨️ Sterowanie: **[W][A][S][D]** (Ruch w poziomie) | Wysokość zablokowana na 50m
-                </div>
+        gameState.gameMode === "3D" ? (
+          <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 5 }}>
+            <div style={{ width: "100%", height: "100%", background: "#0c0a09" }}>
+              <Canvas shadows camera={{ fov: 60, near: 0.1, far: 2000, position: [0, 55, 10] }}>
+                <World3D 
+                  targetLocation={gameState.targetLocation} 
+                  players={gameState.players}
+                  localPlayerId={socket.id}
+                />
+                <DronePlayer 
+                  targetLocation={gameState.targetLocation} 
+                  onLocationChange={handleLocationChange} 
+                />
+              </Canvas>
+              {/* Guide overlay for 3D Mode */}
+              <div 
+                className="glass-panel animate-fade-in"
+                style={{
+                  position: "absolute",
+                  bottom: "20px",
+                  left: "20px",
+                  padding: "10px 20px",
+                  fontSize: "13px",
+                  color: "#818cf8",
+                  fontWeight: 600,
+                  zIndex: 100,
+                  pointerEvents: "none",
+                  borderLeft: "4px solid #6366f1"
+                }}
+              >
+                🛸 Tryb 3D: Pilotowanie drona | ⌨️ Sterowanie: **[W][S]** (Przód/Tył) | **[A][D]** (Obrót kamery) | Wysokość zablokowana na 50m
               </div>
-            ) : (
-              <>
-                {gameState.targetLocation && (
-                  <StreetViewPlay
-                    lat={localPlayer ? localPlayer.lat : gameState.targetLocation.lat}
-                    lng={localPlayer ? localPlayer.lng : gameState.targetLocation.lng}
-                    onLocationChange={handleLocationChange}
-                    players={gameState.players}
-                    localPlayerId={socket.id}
-                  />
-                )}
-                {/* Guide overlay */}
-                <div 
-                  className="glass-panel"
-                  style={{
-                    position: "absolute",
-                    bottom: "20px",
-                    left: "20px",
-                    padding: "10px 20px",
-                    fontSize: "13px",
-                    color: "#fbbf24",
-                    fontWeight: 600,
-                    zIndex: 100,
-                    pointerEvents: "none"
-                  }}
-                >
-                  ⌨️ Sterowanie: [W]/[S] - Idź przód/tył | [A]/[D] - Obrót kamery
-                </div>
-              </>
-            )}
+            </div>
           </div>
+        ) : (
+          <div className="split-screen" style={{ zIndex: 5 }}>
+            {/* Left panel: Interactive Street View */}
+            <div style={{ position: "relative", width: "100%", height: "100%" }}>
+              {gameState.targetLocation && (
+                <StreetViewPlay
+                  lat={localPlayer ? localPlayer.lat : gameState.targetLocation.lat}
+                  lng={localPlayer ? localPlayer.lng : gameState.targetLocation.lng}
+                  onLocationChange={handleLocationChange}
+                  players={gameState.players}
+                  localPlayerId={socket.id}
+                />
+              )}
+              {/* Guide overlay */}
+              <div 
+                className="glass-panel"
+                style={{
+                  position: "absolute",
+                  bottom: "20px",
+                  left: "20px",
+                  padding: "10px 20px",
+                  fontSize: "13px",
+                  color: "#fbbf24",
+                  fontWeight: 600,
+                  zIndex: 100,
+                  pointerEvents: "none"
+                }}
+              >
+                ⌨️ Sterowanie: [W]/[S] - Idź przód/tył | [A]/[D] - Obrót kamery
+              </div>
+            </div>
 
-          {/* Right panel: Stylized Road Map showing the beans */}
-          <RoadMap players={gameState.players} localPlayerId={socket.id} theme={theme} />
-        </div>
+            {/* Right panel: Stylized Road Map showing the beans */}
+            <RoadMap players={gameState.players} localPlayerId={socket.id} theme={theme} />
+          </div>
+        )
       )}
 
       {/* 5. Lobby Background Map (LOBBY - full screen road grid map) */}

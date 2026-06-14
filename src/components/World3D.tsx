@@ -4,6 +4,20 @@ import * as THREE from "three";
 import { useMemo, useRef, useCallback } from "react";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { Html } from "@react-three/drei";
+
+function getElevation(lat: number): number {
+  if (Math.abs(lat - 49.2958) < 0.05) return 830; // Zakopane
+  if (Math.abs(lat - 50.0626) < 0.05) return 220; // Kraków
+  if (Math.abs(lat - 52.2304) < 0.05) return 110; // Warszawa
+  if (Math.abs(lat - 51.1098) < 0.05 || Math.abs(lat - 51.1143) < 0.05) return 120; // Wrocław
+  if (Math.abs(lat - 52.4082) < 0.05) return 85; // Poznań
+  if (Math.abs(lat - 53.0103) < 0.05) return 50; // Toruń
+  if (Math.abs(lat - 54.4443) < 0.05) return 40; // Sopot
+  if (Math.abs(lat - 54.0405) < 0.05) return 15; // Malbork
+  if (Math.abs(lat - 54.3486) < 0.05) return 5; // Gdańsk
+  return 100; // default fallback
+}
 
 const CESIUM_ION_ACCESS_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN || "";
 const CESIUM_AUTH_ARGS = [{ apiToken: CESIUM_ION_ACCESS_TOKEN, assetId: 96188 }];
@@ -14,7 +28,15 @@ dracoLoader.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5
 
 
 
-export function World3D({ targetLocation }: { targetLocation: { lat: number; lng: number } | null }) {
+export function World3D({ 
+  targetLocation,
+  players = [],
+  localPlayerId
+}: { 
+  targetLocation: { lat: number; lng: number } | null;
+  players?: any[];
+  localPlayerId?: string;
+}) {
   const tilesRef = useRef<any>(null);
   const failedUrls = useRef<Set<string>>(new Set());
 
@@ -72,7 +94,7 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
     }
     const lat = targetLocation.lat;
     const lon = targetLocation.lng;
-    const height = 0; 
+    const height = getElevation(lat); 
 
     // WGS84 ECEF constants
     const a = 6378137.0; 
@@ -120,11 +142,15 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
 
   return (
     <group>
-      <ambientLight intensity={1.5} />
-      <directionalLight position={[100, 200, 50]} intensity={2.5} castShadow />
+      <color attach="background" args={["#0c0a09"]} />
+      <fog attach="fog" args={["#0c0a09", 100, 600]} />
+
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[200, 300, 100]} intensity={1.8} castShadow />
+      <hemisphereLight args={["#818cf8", "#0c0a09", 0.7]} />
       
-      {/* Helper grid at local origin */}
-      <gridHelper args={[1000, 100, '#ffffff', '#555555']} position={[0, 0, 0]} />
+      {/* Helper grid at local origin (Y=0, ground level) */}
+      <gridHelper args={[2000, 100, '#4f46e5', '#334155']} position={[0, 0, 0]} />
 
       {targetLocation && (
         <group position={position} quaternion={quaternion}>
@@ -137,9 +163,16 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
                 if (e && e.scene) {
                   e.scene.traverse((child: any) => {
                     if (child.isMesh && child.material) {
-                      child.material.side = THREE.FrontSide;
-                      child.material.transparent = false;
-                      child.material.depthWrite = true;
+                      // Apply slate gray structural material for styled architectural aesthetic
+                      child.material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color("#334155"), // slate-700
+                        roughness: 0.5,
+                        metalness: 0.1,
+                        flatShading: true,
+                        side: THREE.DoubleSide
+                      });
+                      child.castShadow = true;
+                      child.receiveShadow = true;
                     }
                   });
                 }
@@ -164,6 +197,56 @@ export function World3D({ targetLocation }: { targetLocation: { lat: number; lng
           </group>
         </group>
       )}
+
+      {/* Other Players 3D Representation */}
+      {targetLocation && players.map((p) => {
+        if (p.id === localPlayerId) return null;
+
+        const startLat = targetLocation.lat;
+        const startLng = targetLocation.lng;
+        const metersPerDegreeLat = 111132;
+        const metersPerDegreeLng = 111132 * Math.cos(startLat * Math.PI / 180);
+
+        // Compute local position coordinates relative to target center
+        const px = (p.lng - startLng) * metersPerDegreeLng;
+        const pz = -(p.lat - startLat) * metersPerDegreeLat;
+
+        return (
+          <group key={p.id} position={[px, 50, pz]}>
+            {/* Glowing sphere drone for other player */}
+            <mesh castShadow>
+              <sphereGeometry args={[1.5, 16, 16]} />
+              <meshStandardMaterial 
+                color="#fbbf24" 
+                roughness={0.2}
+                metalness={0.8}
+                emissive="#f59e0b"
+                emissiveIntensity={0.6}
+              />
+            </mesh>
+            {/* Nickname tag hovering above player */}
+            <Html distanceFactor={40} position={[0, 3.5, 0]} center>
+              <div 
+                className="glass-panel"
+                style={{
+                  background: "rgba(12, 10, 9, 0.85)",
+                  border: "1px solid rgba(251, 191, 36, 0.5)",
+                  color: "#fbbf24",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: 800,
+                  whiteSpace: "nowrap",
+                  pointerEvents: "none",
+                  boxShadow: "0 0 10px rgba(251, 191, 36, 0.2)"
+                }}
+              >
+                {p.nickname}
+              </div>
+            </Html>
+          </group>
+        );
+      })}
     </group>
   );
 }
