@@ -382,6 +382,8 @@ export function GoogleMap3D({
               if (el) el.scale = DRONE_SCALE;
             }}
             src="/models/sample.glb?v=2"
+            position={{ lat: targetLat, lng: targetLng, altitude: 40 }}
+            orientation={{ heading: 0, tilt: 0, roll: 0 }}
             altitude-mode="relative-to-ground"
           />
         )}
