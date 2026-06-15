@@ -55,6 +55,7 @@ export function GoogleMap3D({
 
   const [apiLoaded, setApiLoaded] = useState(false);
   const [apiError, setApiError] = useState(false);
+  const [groundElevation, setGroundElevation] = useState<number>(150); // Fallback: 150m MSL
 
   // Flight states (held in refs for requestAnimationFrame speed/concurrency)
   const positionRef = useRef<{ lat: number; lng: number; altitude: number } | null>(null);
@@ -106,7 +107,7 @@ export function GoogleMap3D({
   const targetLat = targetLocation?.lat;
   const targetLng = targetLocation?.lng;
 
-  // Sync starting location when round changes or API loads
+  // Sync starting location and query elevation when round changes or API loads
   useEffect(() => {
     if (targetLat != null && targetLng != null) {
       const isSameLocation = positionRef.current && 
@@ -117,12 +118,42 @@ export function GoogleMap3D({
         positionRef.current = {
           lat: targetLat,
           lng: targetLng,
-          altitude: 40, // 40m relative to ground
+          altitude: groundElevation + 40,
         };
         headingRef.current = 0;
       }
+
+      if (apiLoaded) {
+        // Query the actual elevation from Google Maps ElevationService
+        const queryElevation = () => {
+          try {
+            const ElevationService = (window as any).google?.maps?.ElevationService;
+            if (ElevationService) {
+              const elevator = new ElevationService();
+              elevator.getElevationForLocations({
+                locations: [{ lat: targetLat, lng: targetLng }]
+              }, (results: any, status: any) => {
+                if (status === "OK" && results && results[0]) {
+                  const elev = results[0].elevation;
+                  console.log("Resolved ground elevation:", elev);
+                  setGroundElevation(elev);
+                  positionRef.current = {
+                    lat: targetLat,
+                    lng: targetLng,
+                    altitude: elev + 40, // 40 meters above resolved ground level
+                  };
+                }
+              });
+            }
+          } catch (e) {
+            console.error("Failed to query ground elevation:", e);
+          }
+        };
+
+        queryElevation();
+      }
     }
-  }, [targetLat, targetLng]);
+  }, [targetLat, targetLng, apiLoaded]);
 
   // Key Event Listeners
   useEffect(() => {
@@ -382,9 +413,9 @@ export function GoogleMap3D({
               if (el) el.scale = DRONE_SCALE;
             }}
             src="/models/sample.glb?v=2"
-            position={{ lat: targetLat, lng: targetLng, altitude: 40 }}
+            position={{ lat: targetLat, lng: targetLng, altitude: groundElevation + 40 }}
             orientation={{ heading: 0, tilt: 0, roll: 0 }}
-            altitude-mode="relative-to-ground"
+            altitude-mode="absolute"
           />
         )}
 
@@ -399,14 +430,14 @@ export function GoogleMap3D({
                   if (el) el.scale = DRONE_SCALE;
                 }}
                 src="/models/sample.glb?v=2"
-                position={{ lat: p.lat, lng: p.lng, altitude: 40 }}
-                altitude-mode="relative-to-ground"
+                position={{ lat: p.lat, lng: p.lng, altitude: groundElevation + 40 }}
+                altitude-mode="absolute"
                 orientation={{ heading: p.heading ?? 0, tilt: 0, roll: 0 }}
               />,
               <gmp-marker-3d
                 key={`marker-${p.id}`}
-                position={{ lat: p.lat, lng: p.lng, altitude: 50 }}
-                altitude-mode="relative-to-ground"
+                position={{ lat: p.lat, lng: p.lng, altitude: groundElevation + 50 }}
+                altitude-mode="absolute"
                 extruded={true}
               >
                 {/* Visual Label showing player's name tag in 3D space */}
