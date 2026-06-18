@@ -56,6 +56,7 @@ export function GoogleMap3D({
 
   const [apiLoaded, setApiLoaded] = useState(false);
   const [apiError, setApiError] = useState(false);
+  const [groundElevation, setGroundElevation] = useState<number>(150); // Fallback: 150m MSL
 
   // Flight states (held in refs for requestAnimationFrame speed/concurrency)
   const positionRef = useRef<{ lat: number; lng: number; altitude: number } | null>(null);
@@ -107,7 +108,7 @@ export function GoogleMap3D({
   const targetLat = targetLocation?.lat;
   const targetLng = targetLocation?.lng;
 
-  // Sync starting location when round changes or API loads
+  // Sync starting location and query elevation when round changes or API loads
   useEffect(() => {
     if (targetLat != null && targetLng != null) {
       const isSameLocation = positionRef.current && 
@@ -118,12 +119,42 @@ export function GoogleMap3D({
         positionRef.current = {
           lat: targetLat,
           lng: targetLng,
-          altitude: DRONE_ALTITUDE,
+          altitude: groundElevation + DRONE_ALTITUDE,
         };
         headingRef.current = 0;
       }
+
+      if (apiLoaded) {
+        // Query the actual elevation from Google Maps ElevationService
+        const queryElevation = () => {
+          try {
+            const ElevationService = (window as any).google?.maps?.ElevationService;
+            if (ElevationService) {
+              const elevator = new ElevationService();
+              elevator.getElevationForLocations({
+                locations: [{ lat: targetLat, lng: targetLng }]
+              }, (results: any, status: any) => {
+                if (status === "OK" && results && results[0]) {
+                  const elev = results[0].elevation;
+                  console.log("Resolved ground elevation:", elev);
+                  setGroundElevation(elev);
+                  positionRef.current = {
+                    lat: targetLat,
+                    lng: targetLng,
+                    altitude: elev + DRONE_ALTITUDE,
+                  };
+                }
+              });
+            }
+          } catch (e) {
+            console.error("Failed to query ground elevation:", e);
+          }
+        };
+
+        queryElevation();
+      }
     }
-  }, [targetLat, targetLng]);
+  }, [targetLat, targetLng, apiLoaded]);
 
   // Key Event Listeners
   useEffect(() => {
@@ -310,7 +341,7 @@ export function GoogleMap3D({
           lng: pos.lng,
           altitude: pos.altitude,
         };
-        droneEl.setAttribute('altitude-mode', 'relative-to-ground');
+        droneEl.setAttribute('altitude-mode', 'absolute');
         droneEl.orientation = {
           heading: droneHeadingRef.current,
           tilt: droneTiltRef.current,
@@ -413,11 +444,11 @@ export function GoogleMap3D({
               droneRef.current = el;
               if (el) {
                 el.scale = DRONE_SCALE;
-                el.setAttribute('altitude-mode', 'relative-to-ground');
+                el.setAttribute('altitude-mode', 'absolute');
               }
             }}
             src="/models/sample.glb"
-            altitude-mode="relative-to-ground"
+            altitude-mode="absolute"
           />
         )}
 
@@ -431,24 +462,24 @@ export function GoogleMap3D({
                 ref={(el: any) => {
                   if (el) {
                     el.scale = DRONE_SCALE;
-                    el.setAttribute('altitude-mode', 'relative-to-ground');
+                    el.setAttribute('altitude-mode', 'absolute');
                   }
                 }}
                 src="/models/sample.glb"
-                position={{ lat: p.lat, lng: p.lng, altitude: p.altitude ?? DRONE_ALTITUDE }}
+                position={{ lat: p.lat, lng: p.lng, altitude: p.altitude ?? (groundElevation + DRONE_ALTITUDE) }}
                 orientation={{ heading: p.heading ?? 0, tilt: 0, roll: 0 }}
-                altitude-mode="relative-to-ground"
+                altitude-mode="absolute"
               />,
               <gmp-marker-3d
                 key={`marker-${p.id}`}
                 ref={(el: any) => {
                   if (el) {
-                    el.setAttribute('altitude-mode', 'relative-to-ground');
+                    el.setAttribute('altitude-mode', 'absolute');
                   }
                 }}
-                position={{ lat: p.lat, lng: p.lng, altitude: (p.altitude ?? DRONE_ALTITUDE) + 10 }}
+                position={{ lat: p.lat, lng: p.lng, altitude: (p.altitude ?? (groundElevation + DRONE_ALTITUDE)) + 10 }}
                 extruded={true}
-                altitude-mode="relative-to-ground"
+                altitude-mode="absolute"
               >
                 {/* Visual Label showing player's name tag in 3D space */}
                 <div
