@@ -14,6 +14,7 @@ type Player = {
   lat: number;
   lng: number;
   heading?: number;
+  altitude?: number;
 };
 
 type GameStatus = "LOBBY" | "ROUND_ACTIVE" | "ROUND_RESULTS" | "GAME_OVER";
@@ -152,6 +153,9 @@ export default class GameServer implements Party.Server {
           player.lng = Number(data.lng);
           if (data.heading !== undefined) {
             player.heading = Number(data.heading);
+          }
+          if (data.altitude !== undefined) {
+            player.altitude = Number(data.altitude);
           }
           break;
 
@@ -302,6 +306,7 @@ export default class GameServer implements Party.Server {
       p.lat = this.targetLocation.lat;
       p.lng = this.targetLocation.lng;
       p.heading = 0;
+      p.altitude = undefined;
     }
 
     if (this.timerInterval) clearInterval(this.timerInterval);
@@ -357,6 +362,7 @@ export default class GameServer implements Party.Server {
       p.lat = 52.2304;
       p.lng = 21.0044;
       p.heading = 0;
+      p.altitude = undefined;
     }
   }
 

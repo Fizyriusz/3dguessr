@@ -19,6 +19,8 @@ type Player = {
   // Geographical coordinates
   lat: number;
   lng: number;
+  heading?: number;
+  altitude?: number;
 };
 
 type GameState = {
@@ -190,14 +192,15 @@ function App() {
     });
   };
 
-  // Handle movements triggered inside StreetView
-  const handleLocationChange = (lat: number, lng: number, heading?: number) => {
+  // Handle movements triggered inside StreetView / 3D Earth
+  const handleLocationChange = (lat: number, lng: number, heading?: number, altitude?: number) => {
     if (gameState.status === "ROUND_ACTIVE") {
       socket.send(JSON.stringify({
         type: "update",
         lat,
         lng,
-        heading
+        heading,
+        altitude
       }));
     }
   };

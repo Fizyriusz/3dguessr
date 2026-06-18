@@ -34,11 +34,11 @@ type GoogleMap3DProps = {
   targetLocation: { lat: number; lng: number } | null;
   players: any[];
   localPlayerId: string;
-  onLocationChange: (lat: number, lng: number, heading?: number) => void;
+  onLocationChange: (lat: number, lng: number, heading?: number, altitude?: number) => void;
 };
 
 const DRONE_SCALE = 22.0; // Change this value to adjust the drone size in the environment
-const DRONE_ALTITUDE = 80; // Height above ground in meters (RELATIVE_TO_GROUND)
+const DRONE_ALTITUDE = 120; // Height above ground in meters (RELATIVE_TO_GROUND)
 
 const lerpAngle = (current: number, target: number, step: number) => {
   let diff = ((target - current + 180) % 360) - 180;
@@ -65,7 +65,7 @@ export function GoogleMap3D({
   const droneRollRef = useRef<number>(0);
 
   // Keyboard controls state
-  const keys = useRef({ w: false, s: false, a: false, d: false, q: false, e: false });
+  const keys = useRef({ w: false, s: false, a: false, d: false, q: false, e: false, space: false, shift: false });
 
   // Wait for maps3d custom elements to be registered by the script in index.html
   // Do NOT call importLibrary() here – the script tag already loaded maps3d,
@@ -142,6 +142,11 @@ export function GoogleMap3D({
       if (key === "d" || e.key === "ArrowRight") keys.current.d = true;
       if (key === "q") keys.current.q = true;
       if (key === "e") keys.current.e = true;
+      if (e.key === " ") {
+        keys.current.space = true;
+        e.preventDefault();
+      }
+      if (e.key === "Shift") keys.current.shift = true;
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -152,6 +157,8 @@ export function GoogleMap3D({
       if (key === "d" || e.key === "ArrowRight") keys.current.d = false;
       if (key === "q") keys.current.q = false;
       if (key === "e") keys.current.e = false;
+      if (e.key === " ") keys.current.space = false;
+      if (e.key === "Shift") keys.current.shift = false;
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -268,6 +275,15 @@ export function GoogleMap3D({
           pos.lng += lngSpeed * clampedDt;
         }
 
+        // 2.5. Vertical altitude control (Space / Shift)
+        const VERTICAL_SPEED = 40; // meters per second
+        if (keys.current.space) {
+          pos.altitude = Math.min(500, pos.altitude + VERTICAL_SPEED * clampedDt);
+        }
+        if (keys.current.shift) {
+          pos.altitude = Math.max(10, pos.altitude - VERTICAL_SPEED * clampedDt);
+        }
+
         // Drone heading logic
         let targetDroneHeading = droneHeadingRef.current;
         if (keys.current.w) {
@@ -293,7 +309,7 @@ export function GoogleMap3D({
           lng: pos.lng,
           altitude: pos.altitude,
         };
-        droneEl.altitudeMode = 'RELATIVE_TO_GROUND';
+        droneEl.setAttribute('altitude-mode', 'relative-to-ground');
         droneEl.orientation = {
           heading: droneHeadingRef.current,
           tilt: droneTiltRef.current,
@@ -314,7 +330,7 @@ export function GoogleMap3D({
         // 5. Throttled websocket position update (20Hz)
         if (time - lastSocketSendTime > 50) {
           lastSocketSendTime = time;
-          onLocationChangeRef.current(pos.lat, pos.lng, droneHeadingRef.current);
+          onLocationChangeRef.current(pos.lat, pos.lng, droneHeadingRef.current, pos.altitude);
         }
       }
 
@@ -383,12 +399,13 @@ export function GoogleMap3D({
               droneRef.current = el;
               if (el) {
                 el.scale = DRONE_SCALE;
-                el.altitudeMode = 'RELATIVE_TO_GROUND';
+                el.setAttribute('altitude-mode', 'relative-to-ground');
               }
             }}
             src="/models/sample.glb?v=2"
             position={{ lat: targetLat, lng: targetLng, altitude: DRONE_ALTITUDE }}
             orientation={{ heading: 0, tilt: 0, roll: 0 }}
+            altitude-mode="relative-to-ground"
           />
         )}
 
@@ -402,22 +419,24 @@ export function GoogleMap3D({
                 ref={(el: any) => {
                   if (el) {
                     el.scale = DRONE_SCALE;
-                    el.altitudeMode = 'RELATIVE_TO_GROUND';
+                    el.setAttribute('altitude-mode', 'relative-to-ground');
                   }
                 }}
                 src="/models/sample.glb?v=2"
-                position={{ lat: p.lat, lng: p.lng, altitude: DRONE_ALTITUDE }}
+                position={{ lat: p.lat, lng: p.lng, altitude: p.altitude ?? DRONE_ALTITUDE }}
                 orientation={{ heading: p.heading ?? 0, tilt: 0, roll: 0 }}
+                altitude-mode="relative-to-ground"
               />,
               <gmp-marker-3d
                 key={`marker-${p.id}`}
                 ref={(el: any) => {
                   if (el) {
-                    el.altitudeMode = 'RELATIVE_TO_GROUND';
+                    el.setAttribute('altitude-mode', 'relative-to-ground');
                   }
                 }}
-                position={{ lat: p.lat, lng: p.lng, altitude: DRONE_ALTITUDE + 10 }}
+                position={{ lat: p.lat, lng: p.lng, altitude: (p.altitude ?? DRONE_ALTITUDE) + 10 }}
                 extruded={true}
+                altitude-mode="relative-to-ground"
               >
                 {/* Visual Label showing player's name tag in 3D space */}
                 <div
