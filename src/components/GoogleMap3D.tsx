@@ -402,9 +402,7 @@ export function GoogleMap3D({
                 el.setAttribute('altitude-mode', 'relative-to-ground');
               }
             }}
-            src="/models/sample.glb?v=2"
-            position={{ lat: targetLat, lng: targetLng, altitude: DRONE_ALTITUDE }}
-            orientation={{ heading: 0, tilt: 0, roll: 0 }}
+            src="/models/sample.glb"
             altitude-mode="relative-to-ground"
           />
         )}
@@ -422,7 +420,7 @@ export function GoogleMap3D({
                     el.setAttribute('altitude-mode', 'relative-to-ground');
                   }
                 }}
-                src="/models/sample.glb?v=2"
+                src="/models/sample.glb"
                 position={{ lat: p.lat, lng: p.lng, altitude: p.altitude ?? DRONE_ALTITUDE }}
                 orientation={{ heading: p.heading ?? 0, tilt: 0, roll: 0 }}
                 altitude-mode="relative-to-ground"
