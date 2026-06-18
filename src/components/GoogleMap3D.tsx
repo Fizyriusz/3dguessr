@@ -184,6 +184,7 @@ export function GoogleMap3D({
     let animFrameId: number;
     let lastTime = performance.now();
     let lastSocketSendTime = 0;
+    let lastDroneLogTime = 0;
     let initialized = false;
 
     const loop = (time: number) => {
@@ -331,6 +332,19 @@ export function GoogleMap3D({
         if (time - lastSocketSendTime > 50) {
           lastSocketSendTime = time;
           onLocationChangeRef.current(pos.lat, pos.lng, droneHeadingRef.current, pos.altitude);
+        }
+
+        // 6. Debug logging (every 2 seconds)
+        if (time - lastDroneLogTime > 2000) {
+          lastDroneLogTime = time;
+          console.log("DEBUG: Drone element:", droneEl);
+          if (droneEl) {
+            console.log("DEBUG: Drone position:", JSON.stringify(droneEl.position));
+            console.log("DEBUG: Drone orientation:", JSON.stringify(droneEl.orientation));
+            console.log("DEBUG: Drone scale:", droneEl.scale);
+            console.log("DEBUG: Drone altitudeMode:", droneEl.getAttribute('altitude-mode'));
+            console.log("DEBUG: Camera center:", JSON.stringify(mapEl.center));
+          }
         }
       }
 
