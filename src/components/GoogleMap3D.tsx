@@ -447,7 +447,7 @@ export function GoogleMap3D({
                 el.setAttribute('altitude-mode', 'absolute');
               }
             }}
-            src="/models/sample.glb"
+            src="/models/drone.glb"
             altitude-mode="absolute"
           />
         )}
