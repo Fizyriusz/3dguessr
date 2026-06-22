@@ -73,6 +73,11 @@ body {
   background: var(--bg-color) !important;
 }
 
+/* Dark theme filter for Google Maps tiles in Leaflet */
+.leaflet-google-dark .leaflet-tile {
+  filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(100%);
+}
+
 /* Split screen layout */
 .split-screen {
   display: grid;
@@ -281,6 +286,10 @@ body {
   animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.animate-fade-in-centered {
+  animation: fadeInCentered 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .animate-zoom-in {
   animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
@@ -288,6 +297,11 @@ body {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInCentered {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 @keyframes zoomIn {

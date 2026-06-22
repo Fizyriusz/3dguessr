@@ -15,6 +15,11 @@ type Player = {
   lng: number;
   heading?: number;
   altitude?: number;
+
+  // The actual spawn coordinates where the player appeared at the start of the round
+  spawnLat?: number;
+  spawnLng?: number;
+  hasSnapped?: boolean;
 };
 
 type GameStatus = "LOBBY" | "ROUND_ACTIVE" | "ROUND_RESULTS" | "GAME_OVER";
@@ -117,6 +122,9 @@ export default class GameServer implements Party.Server {
       if (data.type === "join") {
         if (!this.players.has(sender.id)) {
           const isHost = this.players.size === 0;
+          const spawnLat = this.targetLocation ? this.targetLocation.lat : 52.2304;
+          const spawnLng = this.targetLocation ? this.targetLocation.lng : 21.0044;
+
           this.players.set(sender.id, {
             id: sender.id,
             nickname: (data.nickname || "Player").trim().substring(0, 16),
@@ -126,9 +134,12 @@ export default class GameServer implements Party.Server {
             roundPoints: 0,
             distance: null,
             isHost: isHost,
-            lat: 52.2304,
-            lng: 21.0044,
-            heading: 0
+            lat: spawnLat,
+            lng: spawnLng,
+            heading: 0,
+            spawnLat: spawnLat,
+            spawnLng: spawnLng,
+            hasSnapped: false
           });
         } else {
           const p = this.players.get(sender.id)!;
@@ -149,6 +160,11 @@ export default class GameServer implements Party.Server {
 
         case "update":
           // Realtime 2D coordinates sync
+          if (this.status === "ROUND_ACTIVE" && !player.hasSnapped) {
+            player.spawnLat = Number(data.lat);
+            player.spawnLng = Number(data.lng);
+            player.hasSnapped = true;
+          }
           player.lat = Number(data.lat);
           player.lng = Number(data.lng);
           if (data.heading !== undefined) {
@@ -196,11 +212,10 @@ export default class GameServer implements Party.Server {
             player.distance = getDistance(
               player.guess.lat,
               player.guess.lng,
-              this.targetLocation.lat,
-              this.targetLocation.lng
+              player.spawnLat ?? this.targetLocation.lat,
+              player.spawnLng ?? this.targetLocation.lng
             );
             player.roundPoints = calculateScore(player.distance);
-            player.score += player.roundPoints;
 
             // Trigger Geoguessr-style countdown if enabled and this is the first guess
             if (isFirstGuess && this.firstGuessTimerEnabled) {
@@ -307,6 +322,11 @@ export default class GameServer implements Party.Server {
       p.lng = this.targetLocation.lng;
       p.heading = 0;
       p.altitude = undefined;
+
+      // Reset spawn coordinates
+      p.spawnLat = this.targetLocation.lat;
+      p.spawnLng = this.targetLocation.lng;
+      p.hasSnapped = false;
     }
 
     if (this.timerInterval) clearInterval(this.timerInterval);
@@ -327,6 +347,7 @@ export default class GameServer implements Party.Server {
       this.timerInterval = null;
     }
 
+    // Auto-guess for anyone who hasn't guessed, and add roundPoints to total score for all players
     for (const p of this.players.values()) {
       if (!p.hasGuessed) {
         p.hasGuessed = true;
@@ -334,9 +355,12 @@ export default class GameServer implements Party.Server {
         p.roundPoints = 0;
         p.distance = null;
       }
+      p.score += p.roundPoints;
     }
 
     this.status = "ROUND_RESULTS";
+    this.countdownActive = false;
+    this.broadcastState();
   }
 
   resetGame() {
@@ -385,7 +409,26 @@ export default class GameServer implements Party.Server {
         lng: this.targetLocation.lng,
         name: (this.status === "ROUND_RESULTS" || this.status === "GAME_OVER") ? this.targetLocation.name : ""
       } : null,
-      players: Array.from(this.players.values())
+      players: Array.from(this.players.values()).map(p => {
+        // If the round is active, we strip out the guess and current round's points/distance.
+        if (this.status === "ROUND_ACTIVE") {
+          return {
+            id: p.id,
+            nickname: p.nickname,
+            isHost: p.isHost,
+            hasGuessed: p.hasGuessed,
+            score: p.score,
+            guess: null,
+            roundPoints: 0,
+            distance: null,
+            lat: p.lat,
+            lng: p.lng,
+            heading: p.heading,
+            altitude: p.altitude
+          };
+        }
+        return p;
+      })
     };
     this.room.broadcast(JSON.stringify(state));
   }

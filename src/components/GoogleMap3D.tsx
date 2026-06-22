@@ -37,7 +37,9 @@ type GoogleMap3DProps = {
   onLocationChange: (lat: number, lng: number, heading?: number, altitude?: number) => void;
 };
 
-const DRONE_SCALE = 22.0; // Change this value to adjust the drone size in the environment
+const DRONE_SCALE = 8.0; // Change this value to adjust the drone size in the environment
+const DRONE_HEADING_OFFSET = 180.0; // Offset in degrees to align the 3D model with flight direction
+const DRONE_TILT_OFFSET = 90.0; // Offset in degrees to lay the 3D model flat (horizontally)
 const DRONE_ALTITUDE = 120; // Height above ground in meters (RELATIVE_TO_GROUND)
 
 const lerpAngle = (current: number, target: number, step: number) => {
@@ -202,6 +204,8 @@ export function GoogleMap3D({
   }, []);
 
   const cameraTiltRef = useRef<number>(65);
+  const currentSpeedRef = useRef<number>(0);
+  const speedometerRef = useRef<HTMLDivElement>(null);
 
   const onLocationChangeRef = useRef(onLocationChange);
   useEffect(() => {
@@ -289,9 +293,25 @@ export function GoogleMap3D({
         }
 
         // 2. Translational forward/backward control (W/S) relative to current camera heading
-        const MAX_SPEED = 50; // meters per second
-        if (keys.current.w || keys.current.s) {
-          const dir = keys.current.w ? 1 : -1;
+        const MAX_SPEED = 120; // meters per second (approx 432 km/h)
+        const ACCELERATION = 60; // m/s^2
+        const DECELERATION = 40; // m/s^2 (friction)
+
+        let speed = currentSpeedRef.current;
+        if (keys.current.w) {
+          speed = Math.min(MAX_SPEED, speed + ACCELERATION * clampedDt);
+        } else if (keys.current.s) {
+          speed = Math.max(-MAX_SPEED / 2, speed - ACCELERATION * clampedDt);
+        } else {
+          if (speed > 0) {
+            speed = Math.max(0, speed - DECELERATION * clampedDt);
+          } else if (speed < 0) {
+            speed = Math.min(0, speed + DECELERATION * clampedDt);
+          }
+        }
+        currentSpeedRef.current = speed;
+
+        if (Math.abs(speed) > 0.01) {
           const headingRad = (currentHeading * Math.PI) / 180;
           const dLatDir = Math.cos(headingRad);
           const dLngDir = Math.sin(headingRad);
@@ -300,11 +320,17 @@ export function GoogleMap3D({
           const metersPerDegreeLat = 111132;
           const metersPerDegreeLng = 111132 * Math.cos((pos.lat * Math.PI) / 180);
 
-          const latSpeed = (MAX_SPEED * dir * dLatDir) / metersPerDegreeLat;
-          const lngSpeed = (MAX_SPEED * dir * dLngDir) / metersPerDegreeLng;
+          const latSpeed = (speed * dLatDir) / metersPerDegreeLat;
+          const lngSpeed = (speed * dLngDir) / metersPerDegreeLng;
 
           pos.lat += latSpeed * clampedDt;
           pos.lng += lngSpeed * clampedDt;
+        }
+
+        // Update speedometer display directly in DOM (bypasses React renders to prevent <gmp-map-3d> resets)
+        if (speedometerRef.current) {
+          const speedKmh = Math.round(Math.abs(speed) * 3.6);
+          speedometerRef.current.textContent = `${speedKmh} km/h`;
         }
 
         // 2.5. Vertical altitude control (Space / Shift)
@@ -318,9 +344,9 @@ export function GoogleMap3D({
 
         // Drone heading logic
         let targetDroneHeading = droneHeadingRef.current;
-        if (keys.current.w) {
+        if (speed > 0.1) {
           targetDroneHeading = currentHeading;
-        } else if (keys.current.s) {
+        } else if (speed < -0.1) {
           targetDroneHeading = (currentHeading + 180) % 360;
         }
         
@@ -328,7 +354,9 @@ export function GoogleMap3D({
         droneHeadingRef.current = lerpAngle(droneHeadingRef.current, targetDroneHeading, Math.min(1, 10 * clampedDt));
 
         // Drone tilt (pitch) logic
-        const targetTiltVal = keys.current.w ? 10 : (keys.current.s ? -10 : 0);
+        const targetTiltVal = speed > 0.1 
+          ? 15 * (speed / MAX_SPEED) 
+          : (speed < -0.1 ? -15 * (Math.abs(speed) / (MAX_SPEED / 2)) : 0);
         droneTiltRef.current = droneTiltRef.current + (targetTiltVal - droneTiltRef.current) * Math.min(1, 8 * clampedDt);
 
         // Drone roll logic
@@ -343,8 +371,8 @@ export function GoogleMap3D({
         };
         droneEl.setAttribute('altitude-mode', 'absolute');
         droneEl.orientation = {
-          heading: droneHeadingRef.current,
-          tilt: droneTiltRef.current,
+          heading: (droneHeadingRef.current + DRONE_HEADING_OFFSET + 360) % 360,
+          tilt: droneTiltRef.current + DRONE_TILT_OFFSET,
           roll: droneRollRef.current,
         };
 
@@ -430,7 +458,16 @@ export function GoogleMap3D({
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       {/* Google 3D Custom Map Element */}
       <gmp-map-3d
-        ref={mapRef}
+        ref={(el: any) => {
+          if (el && el !== mapRef.current) {
+            mapRef.current = el;
+            // Prevent POI click detail popups on the 3D map
+            el.addEventListener('gmp-click', (e: any) => {
+              if (e.stop) e.stop();
+              if (e.preventDefault) e.preventDefault();
+            });
+          }
+        }}
         style={{ width: "100%", height: "100%", display: "block" }}
         center={targetLocation ? { lat: targetLocation.lat, lng: targetLocation.lng } : undefined}
         tilt={65}
@@ -467,7 +504,7 @@ export function GoogleMap3D({
                 }}
                 src="/models/sample.glb"
                 position={{ lat: p.lat, lng: p.lng, altitude: p.altitude ?? (groundElevation + DRONE_ALTITUDE) }}
-                orientation={{ heading: p.heading ?? 0, tilt: 0, roll: 0 }}
+                orientation={{ heading: ((p.heading ?? 0) + DRONE_HEADING_OFFSET + 360) % 360, tilt: DRONE_TILT_OFFSET, roll: 0 }}
                 altitude-mode="absolute"
               />,
               <gmp-marker-3d
@@ -503,6 +540,38 @@ export function GoogleMap3D({
             ];
           })}
       </gmp-map-3d>
+
+      {/* Speedometer overlay */}
+      <div 
+        className="glass-panel animate-fade-in-centered"
+        style={{
+          position: "absolute",
+          bottom: "80px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          padding: "8px 16px",
+          zIndex: 100,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "2px",
+          pointerEvents: "none",
+          minWidth: "120px"
+        }}
+      >
+        <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, letterSpacing: "1px" }}>PRĘDKOŚĆ</span>
+        <div 
+          ref={speedometerRef}
+          style={{
+            fontSize: "28px",
+            fontWeight: 800,
+            color: "#10b981",
+            fontFamily: "monospace",
+          }}
+        >
+          0 km/h
+        </div>
+      </div>
     </div>
   );
 }

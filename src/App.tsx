@@ -70,6 +70,7 @@ function App() {
     return (localStorage.getItem("poland_guessr_theme") as "light" | "dark") || "dark";
   });
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [activeMenuTab, setActiveMenuTab] = useState<"changelog" | "roadmap">("changelog");
 
   // Sync theme class with body element
   useEffect(() => {
@@ -257,22 +258,27 @@ function App() {
             position: "absolute",
             width: "100%",
             height: "100%",
-            backgroundColor: "rgba(13, 12, 29, 0.75)",
-            backdropFilter: "blur(12px)",
+            backgroundColor: "rgba(13, 12, 29, 0.8)",
+            backdropFilter: "blur(16px)",
             zIndex: 30,
             display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
             justifyContent: "center",
             alignItems: "center",
-            padding: "20px",
-            boxSizing: "border-box"
+            gap: "40px",
+            padding: "40px 20px",
+            boxSizing: "border-box",
+            overflowY: "auto"
           }}
         >
+          {/* Main Card (Login Form) */}
           <div 
             className="glass-panel animate-zoom-in"
             style={{
               width: "100%",
-              maxWidth: "440px",
-              padding: "40px",
+              maxWidth: "420px",
+              padding: "36px",
               textAlign: "center",
               display: "flex",
               flexDirection: "column",
@@ -338,6 +344,178 @@ function App() {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Changelog & Roadmap Panel */}
+          <div 
+            className="glass-panel animate-zoom-in"
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              maxHeight: "560px",
+              padding: "30px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+              textAlign: "left",
+              overflowY: "auto"
+            }}
+          >
+            {/* Tabs Selector */}
+            <div style={{ display: "flex", borderBottom: "1px solid rgba(255, 255, 255, 0.1)", paddingBottom: "10px", gap: "20px" }}>
+              <button
+                type="button"
+                onClick={() => setActiveMenuTab("changelog")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: activeMenuTab === "changelog" ? "#6366f1" : "#94a3b8",
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  borderBottom: activeMenuTab === "changelog" ? "2px solid #6366f1" : "2px solid transparent",
+                  transition: "all 0.2s"
+                }}
+              >
+                📜 Lista zmian (Changelog)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMenuTab("roadmap")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: activeMenuTab === "roadmap" ? "#a78bfa" : "#94a3b8",
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  borderBottom: activeMenuTab === "roadmap" ? "2px solid #a78bfa" : "2px solid transparent",
+                  transition: "all 0.2s"
+                }}
+              >
+                🗺️ Karta drogowa (Roadmap)
+              </button>
+            </div>
+
+            {/* Tab Contents */}
+            {activeMenuTab === "changelog" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 800, color: "#10b981" }}>Wersja 1.2.0 (Najnowsza)</span>
+                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>Dzisiaj</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#cbd5e1", lineHeight: "1.6" }}>
+                    <li><b>Skalowanie i poziomowanie drona:</b> Zmniejszono drona o ok. 60% oraz obrócono o 90° w pionie (pochylenie) i 180° w poziomie, dzięki czemu leży płasko i leci przodem do kierunku lotu.</li>
+                    <li><b>Nowa fizyka drona:</b> Dodano progresywne przyspieszanie lotu (do 432 km/h) oraz bezwładne wyhamowywanie po puszczeniu klawiszy.</li>
+                    <li><b>Prędkościomierz:</b> Naekranowy, zoptymalizowany pod kątem 60fps wskaźnik prędkości u dołu ekranu.</li>
+                    <li><b>Zwijana mapa zgadywania:</b> Minimapa zaczyna jako mały przycisk "Zgadnij / Guess", a po kliknięciu rozwija się w duży, wygodny panel z przyciskiem zamknięcia (✕).</li>
+                    <li><b>Ulepszenia mapy i dróg:</b> Przejście na kafelki Google Maps Roadmap w 2D (dodano oznaczenia dróg krajowych DK44, S8 itp. oraz usunięto nazwy województw).</li>
+                    <li><b>Mapy 3D bez spoilerów:</b> Czyste widoki satelitarne w 3D bez nakładania demaskujących nazw sklepów i miejscowości.</li>
+                    <li><b>Sprawiedliwe punktowanie:</b> Odległość liczy się od rzeczywistego punktu spawnu (nawet po snapowaniu panoramy), umożliwiając zdobycie perfekcych 5000 pkt.</li>
+                    <li><b>Ochrona przed wyciekiem:</b> Ukrycie strzałów i punktacji innych graczy przed oficjalnym zakończeniem rundy.</li>
+                  </ul>
+                </div>
+
+                <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.05)" }} />
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 800, color: "#cbd5e1" }}>Wersja 1.1.0</span>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>Czerwiec 2026</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#cbd5e1", lineHeight: "1.6" }}>
+                    <li><b>Migracja Google Maps 3D:</b> Przejście na natywny element HTML5 maps3d od Google, eliminując blokadę regionalną i zmniejszając paczkę klienta o 74%.</li>
+                    <li><b>Trójwymiarowy model drona:</b> Wdrożenie modelu drona GLB poruszającego się w przestrzeni 3D z wysokością 120m i kontrolą wysokości (Spacja/Shift).</li>
+                    <li><b>Drony innych graczy:</b> Widoczność dronów pozostałych graczy na żywo w przestrzeni 3D wraz z plakietkami nicków.</li>
+                  </ul>
+                </div>
+
+                <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.05)" }} />
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 800, color: "#cbd5e1" }}>Wersja 1.0.0</span>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>Czerwiec 2026</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#cbd5e1", lineHeight: "1.6" }}>
+                    <li><b>Tryb Drona/Helikoptera 3D:</b> Wprowadzenie pierwszego eksperymentalnego latania w 3D przy stałej wysokości z wykorzystaniem budynków Cesium OSM.</li>
+                    <li><b>Tryb Pełnoekranowy:</b> Ukrycie zbędnych elementów UI w trybie 3D na rzecz pełnej imersji.</li>
+                  </ul>
+                </div>
+
+                <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.05)" }} />
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 800, color: "#cbd5e1" }}>Wersja 0.5.0</span>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>Czerwiec 2026</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#cbd5e1", lineHeight: "1.6" }}>
+                    <li><b>Zarządzanie pokojami:</b> Dodanie obsługi dynamicznych kodów pokoi, losowego generatora i kopiowania linku do schowka.</li>
+                    <li><b>Lobby & Reset:</b> Wprowadzenie przycisku opuszczania pokoju oraz przycisków hosta do szybkiego restartu rozgrywki.</li>
+                  </ul>
+                </div>
+
+                <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.05)" }} />
+
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 800, color: "#cbd5e1" }}>Wersja 0.1.0</span>
+                    <span style={{ fontSize: "11px", color: "#64748b" }}>Maj 2026</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#cbd5e1", lineHeight: "1.6" }}>
+                    <li><b>Fundamenty 2D:</b> Stworzenie pierwszego prototypu multiplayer opartego na Street View ze zsynchronizowanym ruchem pionków ("beans") na mapie Leaflet.</li>
+                    <li><b>Dostosowanie Lobby:</b> Możliwość wyboru nickname oraz konfiguracja rund gry.</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {activeMenuTab === "roadmap" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0, fontStyle: "italic" }}>
+                  Miejsce na planowane funkcje, tryby gry i przyszłe aktualizacje.
+                </p>
+                
+                {/* Timeline item 1 */}
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#6366f1", boxShadow: "0 0 8px #6366f1" }}></div>
+                    <div style={{ width: "2px", flexGrow: 1, background: "rgba(255, 255, 255, 0.1)", marginTop: "4px" }}></div>
+                  </div>
+                  <div style={{ paddingBottom: "12px" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "white" }}>Najbliższe plany (Q3 2026)</div>
+                    <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>[ Wpisz planowaną funkcję deweloperską ]</div>
+                  </div>
+                </div>
+
+                {/* Timeline item 2 */}
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#a78bfa" }}></div>
+                    <div style={{ width: "2px", flexGrow: 1, background: "rgba(255, 255, 255, 0.1)", marginTop: "4px" }}></div>
+                  </div>
+                  <div style={{ paddingBottom: "12px" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "white" }}>Przyszłe aktualizacje (Q4 2026)</div>
+                    <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px" }}>[ Wpisz planowaną funkcję deweloperską ]</div>
+                  </div>
+                </div>
+
+                {/* Timeline item 3 */}
+                <div style={{ display: "flex", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "rgba(255,255,255,0.2)" }}></div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "#cbd5e1" }}>Dalsza perspektywa (2027)</div>
+                    <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>[ Wpisz planowaną funkcję deweloperską ]</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -600,7 +778,7 @@ function App() {
             )}
             {/* Guide overlay for 3D Mode */}
             <div 
-              className="glass-panel animate-fade-in"
+              className="glass-panel animate-fade-in-centered"
               style={{
                 position: "absolute",
                 bottom: "20px",
@@ -616,7 +794,7 @@ function App() {
                 whiteSpace: "nowrap"
               }}
             >
-              🛸 Tryb 3D: [W]/[S] — Przód/Tył &nbsp;|&nbsp; [A]/[D] — Obrót &nbsp;|&nbsp; [Q]/[E] — Kamera góra/dół &nbsp;|&nbsp; 🖱️ Mysz — Kamera
+              🛸 Tryb 3D: [W]/[S] — Przód/Tył &nbsp;|&nbsp; [A]/[D] — Obrót &nbsp;|&nbsp; [Spacja]/[Shift] — Wysokość &nbsp;|&nbsp; [Q]/[E] — Pochylenie &nbsp;|&nbsp; 🖱️ Mysz — Kamera
             </div>
 
             {/* Guess submission button in 3D mode */}
@@ -676,13 +854,15 @@ function App() {
                 style={{
                   position: "absolute",
                   bottom: "20px",
-                  left: "20px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
                   padding: "10px 20px",
                   fontSize: "13px",
                   color: "#fbbf24",
                   fontWeight: 600,
                   zIndex: 100,
-                  pointerEvents: "none"
+                  pointerEvents: "none",
+                  whiteSpace: "nowrap"
                 }}
               >
                 ⌨️ Sterowanie: [W]/[S] - Idź przód/tył | [A]/[D] - Obrót kamery
@@ -701,7 +881,7 @@ function App() {
           <RoadMap players={gameState.players} localPlayerId={socket.id} theme={theme} />
           {/* Guide Overlay for Lobby */}
           <div 
-            className="glass-panel animate-fade-in"
+            className="glass-panel animate-fade-in-centered"
             style={{
               position: "absolute",
               bottom: "40px",
