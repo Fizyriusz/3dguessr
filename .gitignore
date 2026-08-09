@@ -26,5 +26,6 @@ dist-ssr
 # Credentials
 .env
 .env.*
+!.env.example
 .partykit/
 
