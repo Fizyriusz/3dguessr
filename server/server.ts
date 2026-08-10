@@ -61,6 +61,17 @@ const LOCATIONS: Location[] = [
   { lat: 50.0374, lng: 22.0049, name: "Rynek (przy Ratuszu), Rzeszów", modes: ["2D", "3D"] }
 ];
 
+// Singleton room of the `directory` party that tracks which games are live.
+const DIRECTORY_ROOM = "index";
+
+// How often a room re-announces itself even when nothing changed, so the
+// directory's TTL sweep doesn't drop a quiet but perfectly alive lobby.
+const DIRECTORY_HEARTBEAT_MS = 30_000;
+
+// How often the player map is reconciled against the connections the runtime
+// actually holds. See `pruneGhosts` for why this is necessary.
+const GHOST_SWEEP_MS = 5_000;
+
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius in km
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -98,6 +109,12 @@ export default class GameServer implements Party.Server {
   
   timerInterval: ReturnType<typeof setInterval> | null = null;
   tickInterval: ReturnType<typeof setInterval> | null = null;
+  ghostSweepInterval: ReturnType<typeof setInterval> | null = null;
+  directoryHeartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Last `status|playerCount` pair reported to the directory party, so the 20Hz
+  // broadcast doesn't turn into 20 cross-party requests per second.
+  lastDirectorySignature: string | null = null;
 
   constructor(readonly room: Party.Room) {}
 
@@ -106,6 +123,14 @@ export default class GameServer implements Party.Server {
     this.tickInterval = setInterval(() => {
       this.broadcastState();
     }, 1000 / 20);
+
+    this.ghostSweepInterval = setInterval(() => {
+      if (this.pruneGhosts()) this.broadcastState();
+    }, GHOST_SWEEP_MS);
+
+    this.directoryHeartbeatInterval = setInterval(() => {
+      this.reportToDirectory(true);
+    }, DIRECTORY_HEARTBEAT_MS);
   }
 
   onConnect(conn: Party.Connection) {
@@ -120,6 +145,10 @@ export default class GameServer implements Party.Server {
       
       // If it's a join message, register the player profile
       if (data.type === "join") {
+        // Whoever is left over from a dead socket must go before we decide who
+        // owns this room, otherwise a ghost keeps the host role forever.
+        this.pruneGhosts();
+
         if (!this.players.has(sender.id)) {
           const isHost = this.players.size === 0;
           const spawnLat = this.targetLocation ? this.targetLocation.lat : 52.2304;
@@ -259,28 +288,87 @@ export default class GameServer implements Party.Server {
   }
 
   removePlayer(id: string) {
-    const wasHost = this.players.get(id)?.isHost;
     this.players.delete(id);
+    this.ensureConsistentRoom();
 
-    // Reassign host if needed
-    if (wasHost && this.players.size > 0) {
-      const firstPlayerId = Array.from(this.players.keys())[0];
-      const newHost = this.players.get(firstPlayerId);
-      if (newHost) {
-        newHost.isHost = true;
+    if (this.players.size > 0 && this.status === "ROUND_ACTIVE") {
+      const allGuessed = Array.from(this.players.values()).every(p => p.hasGuessed);
+      if (allGuessed) {
+        this.endRound();
+      }
+    }
+  }
+
+  /**
+   * `onClose` is not guaranteed to fire. A slept laptop, a dropped connection or
+   * a killed browser can leave behind a player whose socket is long gone. One
+   * such ghost keeps `players` non-empty, so the next person to arrive is not
+   * made host — and if the ghost held the host role, nobody can ever start the
+   * game. Reconcile against the connections the runtime actually holds.
+   *
+   * Returns true if anything was removed.
+   */
+  pruneGhosts(): boolean {
+    const live = new Set<string>();
+    for (const conn of this.room.getConnections()) {
+      live.add(conn.id);
+    }
+
+    let removed = false;
+    for (const id of Array.from(this.players.keys())) {
+      if (!live.has(id)) {
+        this.players.delete(id);
+        removed = true;
       }
     }
 
+    if (removed) this.ensureConsistentRoom();
+    return removed;
+  }
+
+  /**
+   * Two invariants, restored whenever the roster changes: an occupied room has
+   * exactly one host, and an empty room parks itself back in the lobby instead
+   * of sitting in a round whose target location has already been cleared.
+   */
+  ensureConsistentRoom() {
     if (this.players.size === 0) {
       this.resetGameData();
-    } else {
-      if (this.status === "ROUND_ACTIVE") {
-        const allGuessed = Array.from(this.players.values()).every(p => p.hasGuessed);
-        if (allGuessed) {
-          this.endRound();
-        }
-      }
+      this.status = "LOBBY";
+      return;
     }
+
+    const players = Array.from(this.players.values());
+    if (!players.some(p => p.isHost)) {
+      players[0].isHost = true;
+    }
+  }
+
+  /**
+   * Announce this room to the `directory` party, which serves the public room
+   * list. Only the room id, its status and a head count leave this server —
+   * the directory is responsible for masking the id before any client sees it.
+   */
+  reportToDirectory(force = false) {
+    const signature = `${this.status}|${this.players.size}`;
+    if (!force && signature === this.lastDirectorySignature) return;
+    this.lastDirectorySignature = signature;
+
+    const directory = this.room.context.parties.directory;
+    if (!directory) return;
+
+    directory
+      .get(DIRECTORY_ROOM)
+      .fetch({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          room: this.room.id,
+          status: this.status,
+          players: this.players.size,
+        }),
+      })
+      .catch((err) => console.error("Directory announcement failed:", err));
   }
 
   startGame() {
@@ -391,6 +479,9 @@ export default class GameServer implements Party.Server {
   }
 
   broadcastState() {
+    // Cheap no-op unless the status or head count actually moved.
+    this.reportToDirectory();
+
     const state = {
       type: "sync",
       status: this.status,

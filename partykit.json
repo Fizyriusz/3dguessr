@@ -1,4 +1,8 @@
 {
   "name": "3dguessr-party",
-  "main": "server/server.ts"
+  "main": "server/server.ts",
+  "parties": {
+    "directory": "server/directory.ts"
+  },
+  "compatibilityDate": "2026-08-10"
 }

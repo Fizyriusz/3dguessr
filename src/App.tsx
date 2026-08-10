@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import usePartySocket from "partysocket/react";
 import { StreetViewPlay } from "./components/StreetViewPlay";
 import { RoadMap } from "./components/RoadMap";
@@ -37,13 +37,58 @@ type GameState = {
   gameMode: "2D" | "3D";
 };
 
+// A live room as advertised by the `directory` party. The real room code never
+// reaches the client — only the masked label and an opaque key.
+type LiveRoom = {
+  key: string;
+  masked: string;
+  status: GameState["status"];
+  players: number;
+};
+
+const PARTYKIT_HOST = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
+
+/**
+ * Connection id, stable for the lifetime of this tab.
+ *
+ * partysocket mints a fresh id per socket instance, so every reload used to
+ * arrive as a brand new player while the previous entry lingered server-side
+ * until its close event landed — the reload became a second, non-host player
+ * staring at its own ghost wearing the host badge. Pinning the id to the tab
+ * makes a reload resume the same player instead. sessionStorage rather than
+ * localStorage, so two tabs remain two distinct players.
+ */
+function getTabClientId(): string {
+  const KEY = "poland_guessr_client_id";
+  let id = sessionStorage.getItem(KEY);
+  if (!id) {
+    // randomUUID only exists in a secure context, which rules out testing over
+    // a plain-http LAN address. Uniqueness per tab is all this needs.
+    id = crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
 function App() {
   // Read room from URL query parameters, default to "default-room"
   const roomId = new URLSearchParams(window.location.search).get("room") || "default-room";
 
+  const clientId = useMemo(() => getTabClientId(), []);
+
   const socket = usePartySocket({
-    host: import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999",
+    host: PARTYKIT_HOST,
     room: roomId,
+    id: clientId,
+  });
+
+  // Read-only feed of which games are currently live.
+  const directorySocket = usePartySocket({
+    host: PARTYKIT_HOST,
+    party: "directory",
+    room: "index",
   });
 
   const [gameState, setGameState] = useState<GameState>({
@@ -70,7 +115,12 @@ function App() {
     return (localStorage.getItem("poland_guessr_theme") as "light" | "dark") || "dark";
   });
   const [copyFeedback, setCopyFeedback] = useState(false);
-  const [activeMenuTab, setActiveMenuTab] = useState<"changelog" | "roadmap">("changelog");
+  const [activeMenuTab, setActiveMenuTab] = useState<"rooms" | "changelog" | "roadmap">("rooms");
+  const [liveRooms, setLiveRooms] = useState<LiveRoom[]>([]);
+
+  // Nickname we registered with, held in a ref so the reconnect handler below
+  // doesn't need to re-subscribe on every keystroke.
+  const joinedAsRef = useRef<string | null>(null);
 
   // Sync theme class with body element
   useEffect(() => {
@@ -101,6 +151,38 @@ function App() {
     socket.addEventListener("message", handleMessage);
     return () => socket.removeEventListener("message", handleMessage);
   }, [socket]);
+
+  // A reconnected socket carries no player registration — the server only knows
+  // it has a connection, not who is behind it. Re-sending the join on every open
+  // lets a dropped connection (network blip, server redeploy) heal itself,
+  // instead of stranding the player as a spectator who can never start a game.
+  useEffect(() => {
+    const handleOpen = () => {
+      if (joinedAsRef.current) {
+        socket.send(JSON.stringify({ type: "join", nickname: joinedAsRef.current }));
+      }
+    };
+
+    socket.addEventListener("open", handleOpen);
+    return () => socket.removeEventListener("open", handleOpen);
+  }, [socket]);
+
+  // Live room list
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === "rooms") {
+          setLiveRooms(data.rooms);
+        }
+      } catch (err) {
+        console.error("Error reading directory message:", err);
+      }
+    };
+
+    directorySocket.addEventListener("message", handleMessage);
+    return () => directorySocket.removeEventListener("message", handleMessage);
+  }, [directorySocket]);
 
   // Handle lobby Keyboard movement (W/S/A/D) directly on the Leaflet grid map
   useEffect(() => {
@@ -147,6 +229,7 @@ function App() {
       return;
     }
 
+    joinedAsRef.current = nickname;
     socket.send(JSON.stringify({ type: "join", nickname }));
     setHasJoined(true);
   };
@@ -170,6 +253,7 @@ function App() {
     if (gameState.status !== "LOBBY" && !confirm("Czy na pewno chcesz opuścić aktywną grę i wrócić do menu?")) {
       return;
     }
+    joinedAsRef.current = null;
     socket.send(JSON.stringify({ type: "leave" }));
     setHasJoined(false);
   };
@@ -362,7 +446,24 @@ function App() {
             }}
           >
             {/* Tabs Selector */}
-            <div style={{ display: "flex", borderBottom: "1px solid rgba(255, 255, 255, 0.1)", paddingBottom: "10px", gap: "20px" }}>
+            <div style={{ display: "flex", borderBottom: "1px solid rgba(255, 255, 255, 0.1)", paddingBottom: "10px", gap: "20px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => setActiveMenuTab("rooms")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: activeMenuTab === "rooms" ? "#10b981" : "#94a3b8",
+                  fontSize: "15px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  borderBottom: activeMenuTab === "rooms" ? "2px solid #10b981" : "2px solid transparent",
+                  transition: "all 0.2s"
+                }}
+              >
+                🌐 Aktywne pokoje{liveRooms.length > 0 ? ` (${liveRooms.length})` : ""}
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveMenuTab("changelog")}
@@ -400,6 +501,99 @@ function App() {
             </div>
 
             {/* Tab Contents */}
+            {activeMenuTab === "rooms" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0, fontStyle: "italic", lineHeight: 1.5 }}>
+                  Kody pokoi są ukryte — widoczna jest tylko pierwsza litera. Żeby dołączyć,
+                  poproś gospodarza o link zaproszenia.
+                </p>
+
+                {liveRooms.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "24px 16px",
+                      textAlign: "center",
+                      background: "var(--item-bg)",
+                      borderRadius: "12px",
+                      color: "#94a3b8",
+                      fontSize: "13px"
+                    }}
+                  >
+                    Nikt teraz nie gra. Stwórz pokój i bądź pierwszy!
+                  </div>
+                ) : (
+                  liveRooms.map((room) => {
+                    const isPlaying = room.status === "ROUND_ACTIVE";
+                    const label =
+                      room.status === "ROUND_ACTIVE" ? "Gra trwa"
+                      : room.status === "ROUND_RESULTS" ? "Wyniki rundy"
+                      : room.status === "GAME_OVER" ? "Koniec gry"
+                      : "W poczekalni";
+                    const color = isPlaying ? "#f59e0b" : room.status === "LOBBY" ? "#10b981" : "#a78bfa";
+
+                    return (
+                      <div
+                        key={room.key}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "12px 14px",
+                          background: "var(--item-bg)",
+                          borderRadius: "12px",
+                          border: "1px solid transparent",
+                          gap: "12px"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                          <span
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              background: color,
+                              boxShadow: `0 0 8px ${color}`,
+                              flexShrink: 0
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: "15px",
+                              fontWeight: 800,
+                              letterSpacing: "2px",
+                              color: "var(--text-color)"
+                            }}
+                          >
+                            {room.masked}
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
+                          <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                            👤 {room.players}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              padding: "3px 10px",
+                              borderRadius: "20px",
+                              color,
+                              background: `${color}26`,
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            {label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
             {activeMenuTab === "changelog" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div>

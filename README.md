@@ -79,6 +79,19 @@ przeglądarka                          PartyKit (Durable Object)
 a `GameServer` rozsyła pełny snapshot stanu do wszystkich **20 razy na sekundę**.
 Jeden `GameServer` = jeden pokój, izolowany, z własnym stanem.
 
+### Katalog pokoi
+
+PartyKit nie ma API do wyliczania pokoi, więc obok głównego party działa drugie —
+`directory` ([`server/directory.ts`](server/directory.ts)), pojedynczy pokój o ID `index`.
+Każdy `GameServer` zgłasza się do niego przez HTTP, gdy zmieni się jego status lub
+liczba graczy, plus heartbeat co 30 s. Wpisy bez heartbeatu wygasają po 90 s, więc
+serwer, który padł w trakcie rundy, sam znika z listy.
+
+**Kod pokoju nigdy nie opuszcza serwera.** Katalog wysyła klientom wyłącznie
+zamaskowaną etykietę (`TESTROOM` → `T*******`) i nieodwracalny klucz do keyowania
+listy w Reakcie. Maskowanie po stronie klienta byłoby ozdobnikiem — pełny kod i tak
+leżałby w ramce WebSocket dla każdego, kto otworzy DevTools.
+
 ### Maszyna stanów
 
 ```
@@ -156,13 +169,16 @@ dlatego część ma tylko `["2D"]`. W obrębie jednej gry lokalizacje się nie p
 - **Biblioteka `maps3d` działa na kanale `v=alpha`** — API Google może się zmienić bez zapowiedzi.
 - **Brak obsługi dotyku.** Sterowanie opiera się na klawiaturze (WSAD), więc na telefonie
   gra jest praktycznie bezużyteczna.
-- **Rozłączenie kosztuje postęp.** Reconnect dostaje nowe ID połączenia, a serwer traktuje
-  gracza jak nowego — punkty przepadają.
+- **Tożsamość gracza żyje tak długo jak karta przeglądarki.** Odświeżenie strony i
+  reconnect wznawiają tę samą sesję (identyfikator w `sessionStorage`), ale zamknięcie
+  karty lub otwarcie gry w nowej karcie tworzy nowego gracza z zerowym wynikiem.
 
 ## Struktura katalogów
 
 ```
-server/           serwer PartyKit — cała logika gry
+server/
+  server.ts       serwer PartyKit — cała logika gry
+  directory.ts    katalog aktywnych pokoi (osobne party)
 src/
   App.tsx         root: socket, HUD, routing stanów gry
   components/     StreetViewPlay (2D) · GoogleMap3D (3D) · RoadMap · GuessMap
